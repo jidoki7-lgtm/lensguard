@@ -142,6 +142,14 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.get("/sw.js")
+def service_worker():
+    # 서비스 워커는 사이트 전체(/)를 제어해야 하므로 루트 경로로 제공한다.
+    resp = send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 @app.get("/api/status")
 def status():
     return jsonify({"mock": not bool(os.environ.get("ANTHROPIC_API_KEY")), "model": MODEL})
