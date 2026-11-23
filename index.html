@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LensGuard</title>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--sub:#60666f;--line:#e3e6ea;--accent:#2457d6;--warn:#d4541c;--ok:#1f8a4c;--mid:#b7830f}
+  @media (prefers-color-scheme:dark){:root{--bg:#101215;--card:#181b20;--ink:#eceef1;--sub:#9aa1ab;--line:#2a2f36;--accent:#6b93ff;--warn:#ff8a5c;--ok:#4cc783;--mid:#e0b33f}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
+  main{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:22px;margin:8px 0 2px}
+  .sub{color:var(--sub);margin:0 0 18px;font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  label.btn,button{appearance:none;border:0;border-radius:10px;padding:12px 16px;font:inherit;font-weight:600;cursor:pointer;background:var(--accent);color:#fff;text-align:center}
+  label.btn.alt,button.alt{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+  button:disabled{opacity:.5;cursor:default}
+  input[type=file]{display:none}
+  video{width:100%;max-height:300px;background:#000;border-radius:10px}
+  .verdict{font-size:18px;font-weight:700}
+  .tag{display:inline-block;padding:2px 9px;border-radius:99px;font-size:13px;font-weight:600;border:1px solid currentColor}
+  .hi{color:var(--warn)}.md{color:var(--mid)}.lo{color:var(--ok)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
+  .frame{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#000;cursor:pointer}
+  .frame canvas{display:block;width:100%;height:auto}
+  .frame .n{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.65);color:#fff;border-radius:6px;font-size:12px;padding:1px 6px}
+  ul{margin:8px 0 0;padding-left:20px}
+  li{margin:4px 0}
+  .note{font-size:13px;color:var(--sub)}
+  .bar{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:10px}
+  .bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+  dialog{border:0;border-radius:14px;padding:0;max-width:92vw;background:var(--card);color:var(--ink)}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  dialog canvas{max-width:90vw;max-height:80vh;display:block}
+  dialog .cap{padding:10px 14px;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  <h1>LensGuard</h1>
+  <p class="sub">영상 속 사람이 스마트(AI) 안경이나 초소형 카메라를 착용했는지 AI가 분석합니다.</p>
+
+  <div class="card">
+    <div class="row">
+      <label class="btn">📹 영상 촬영<input id="rec" type="file" accept="video/*" capture="environment"></label>
+      <label class="btn alt">📁 영상 선택<input id="pick" type="file" accept="video/*"></label>
+    </div>
+    <p class="note" style="margin:10px 0 0">5~10초 정도, 얼굴·상체가 밝게 잘 보이도록 가까이서 천천히 촬영하면 정확도가 올라갑니다.</p>
+    <video id="vid" controls playsinline hidden></video>
+    <div class="row" style="margin-top:12px">
+      <button id="go" disabled>분석 시작</button>
+      <span id="mode" class="note" style="align-self:center"></span>
+    </div>
+    <div class="bar" hidden id="barw"><i id="bar"></i></div>
+    <p id="msg" class="note"></p>
+  </div>
+
+  <div id="out" hidden>
+    <div class="card" id="sum"></div>
+    <div class="card"><b>프레임별 결과</b> <span class="note">(탭하면 크게 보기)</span><div class="grid" id="grid"></div></div>
+  </div>
+
+  <p class="note">※ 이 결과는 AI의 추정이며 오탐·미탐이 있을 수 있습니다. 영상은 분석 목적으로만 쓰이고 서버에 저장되지 않으며, 사람의 신원은 식별하지 않습니다. 타인을 촬영할 때는 해당 지역의 법과 상대방의 사생활을 존중해 주세요.</p>
+  <dialog id="dlg"><canvas id="big"></canvas><div class="cap" id="cap"></div></dialog>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const N_FRAMES = 8, MAX_W = 1024;
+let file = null, frames = [];       // frames: {canvas, dataUrl}
+let results = [];
+
+fetch('/api/status').then(r => r.json()).then(s => {
+  $('mode').textContent = s.mock ? '⚠ 데모(MOCK) 모드: API 키가 없어 가짜 결과가 표시됩니다' : '모델: ' + s.model;
+}).catch(() => {});
+
+function onFile(e){
+  file = e.target.files[0]; if(!file) return;
+  const v = $('vid'); v.src = URL.createObjectURL(file); v.hidden = false;
+  $('go').disabled = false; $('out').hidden = true; $('msg').textContent = '';
+}
+$('rec').onchange = onFile; $('pick').onchange = onFile;
+
+function seek(v, t){
+  return new Promise(res => { v.onseeked = () => res(); v.currentTime = t; });
+}
+async function extractFrames(){
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.src = URL.createObjectURL(file);
+  await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('영상을 읽을 수 없습니다')); });
+  const dur = isFinite(v.duration) ? v.duration : 5;
+  const out = [];
+  for (let i = 0; i < N_FRAMES; i++){
+    const t = Math.min(dur - 0.05, (dur * (i + 0.5)) / N_FRAMES);
+    await seek(v, Math.max(0, t));
+    const sc = Math.min(1, MAX_W / v.videoWidth);
+    const c = document.createElement('canvas');
+    c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    out.push({canvas: c, dataUrl: c.toDataURL('image/jpeg', 0.82), t});
+    $('bar').style.width = ((i + 1) / N_FRAMES * 40) + '%';
+  }
+  return out;
+}
+
+$('go').onclick = async () => {
+  $('go').disabled = true; $('barw').hidden = false; $('bar').style.width = '0';
+  $('msg').textContent = '프레임 추출 중…';
+  try{
+    frames = await extractFrames();
+    $('msg').textContent = 'AI 분석 중… (프레임 ' + frames.length + '장)';
+    $('bar').style.width = '50%';
+    const r = await fetch('/api/analyze', {method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({frames: frames.map(f => f.dataUrl)})});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || '서버 오류');
+    results = j.results; $('bar').style.width = '100%';
+    render(j.mock); $('msg').textContent = '';
+  }catch(err){
+    $('msg').textContent = '오류: ' + err.message;
+  }finally{
+    $('go').disabled = false; setTimeout(() => $('barw').hidden = true, 500);
+  }
+};
+
+function levelOf(c){ return c >= .7 ? 'hi' : c >= .4 ? 'md' : 'lo'; }
+const KIND_KO = {none:'안경 없음', regular:'일반 안경', sunglasses:'선글라스',
+  smart_glasses_suspected:'스마트 안경 의심', smart_glasses_likely:'스마트 안경 가능성 높음'};
+const CAM_KO = {pinhole:'핀홀 렌즈', lens:'렌즈', led:'LED/표시등', unknown:'불명'};
+
+function render(mock){
+  $('out').hidden = false;
+  const ok = results.filter(r => !r.error);
+  // 안경 집계
+  let gScore = 0, gKind = 'none', gFrames = 0;
+  ok.forEach(r => {
+    const g = r.glasses; if(!g) return;
+    if (g.kind === 'smart_glasses_suspected' || g.kind === 'smart_glasses_likely'){
+      gFrames++; if (g.confidence > gScore){ gScore = g.confidence; gKind = g.kind; }
+    }
+  });
+  if (gFrames === 0){
+    const k = ok.find(r => r.glasses && r.glasses.worn);
+    gKind = k ? k.glasses.kind : 'none';
+  }
+  // 카메라 후보 집계
+  const cams = [];
+  ok.forEach(r => (r.camera_candidates || []).forEach(c => { if (c.confidence >= .35) cams.push({...c, frame: r.index}); }));
+  cams.sort((a, b) => b.confidence - a.confidence);
+
+  const lvl = gFrames ? levelOf(gScore) : 'lo';
+  let h = '';
+  if (mock) h += '<p class="note">⚠ 데모 결과입니다. 실제 분석이 아닙니다.</p>';
+  h += '<div class="verdict">안경: <span class="' + lvl + '">' + (KIND_KO[gKind] || gKind) + '</span>';
+  if (gFrames) h += ' <span class="tag ' + lvl + '">' + Math.round(gScore * 100) + '% · ' + gFrames + '/' + ok.length + '프레임</span>';
+  h += '</div>';
+  h += '<div class="verdict" style="margin-top:8px">초소형 카메라 후보: <span class="' + (cams.length ? levelOf(cams[0].confidence) : 'lo') + '">' + (cams.length ? cams.length + '건' : '발견 안 됨') + '</span></div>';
+  if (cams.length){
+    h += '<ul>' + cams.slice(0, 6).map(c =>
+      '<li><b>' + esc(c.where) + '</b> · ' + (CAM_KO[c.kind] || c.kind) + ' · ' + Math.round(c.confidence * 100) + '% <span class="note">(프레임 ' + (c.frame + 1) + ') ' + esc(c.evidence || '') + '</span></li>').join('') + '</ul>';
+  }
+  const bad = results.length - ok.length;
+  if (bad) h += '<p class="note">' + bad + '개 프레임은 분석에 실패했습니다.</p>';
+  const poor = ok.filter(r => r.image_quality === 'poor').length;
+  if (poor) h += '<p class="note">화질이 낮은 프레임이 ' + poor + '장 있어 결과가 부정확할 수 있습니다.</p>';
+  $('sum').innerHTML = h;
+
+  const grid = $('grid'); grid.innerHTML = '';
+  frames.forEach((f, i) => {
+    const r = results[i]; const c = document.createElement('canvas');
+    c.width = f.canvas.width; c.height = f.canvas.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(f.canvas, 0, 0);
+    if (r && !r.error){ draw(ctx, c, r.glasses && r.glasses.bbox, '#ff8a5c', r.glasses && r.glasses.worn ? (KIND_KO[r.glasses.kind] || '') : '');
+      (r.camera_candidates || []).forEach(k => draw(ctx, c, k.bbox, '#ffd23f', k.where)); }
+    const d = document.createElement('div'); d.className = 'frame';
+    d.innerHTML = '<span class="n">' + (i + 1) + '</span>'; d.appendChild(c);
+    d.onclick = () => zoom(c, r); grid.appendChild(d);
+  });
+}
+function draw(ctx, c, b, color, label){
+  if(!b) return;
+  const x = b.x * c.width, y = b.y * c.height, w = b.w * c.width, h = b.h * c.height;
+  ctx.lineWidth = Math.max(2, c.width / 250); ctx.strokeStyle = color; ctx.strokeRect(x, y, w, h);
+  if(label){ ctx.font = Math.round(c.width / 38) + 'px sans-serif'; ctx.fillStyle = color; ctx.fillText(label, x, Math.max(14, y - 5)); }
+}
+function zoom(c, r){
+  const big = $('big'); big.width = c.width; big.height = c.height; big.getContext('2d').drawImage(c, 0, 0);
+  $('cap').textContent = !r ? '' : r.error ? r.error : (r.notes || '') + (r.glasses && r.glasses.evidence ? ' — ' + r.glasses.evidence : '');
+  $('dlg').showModal();
+}
+$('dlg').onclick = () => $('dlg').close();
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+"""LensGuard 분석 서버.
+
+브라우저가 영상에서 뽑은 프레임(JPEG, base64)을 받아 Claude 비전 API로 분석하고
+스마트(AI) 안경 / 초소형 카메라 의심 위치를 JSON으로 돌려준다.
+
+- 프레임은 메모리에서만 처리하고 디스크에 저장하지 않는다.
+- 사람의 신원을 식별하지 않는다. 장비(안경, 렌즈) 유무와 위치만 본다.
+- ANTHROPIC_API_KEY 가 없으면 MOCK 모드로 동작한다 (UI 테스트용 가짜 결과).
+
+실행:
+    export ANTHROPIC_API_KEY=sk-ant-...
+    python3 app.py
+"""
+import base64
+import json
+import os
+import random
+import re
+import urllib.error
+import urllib.request
+
+from flask import Flask, jsonify, request, send_from_directory
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+API_URL = "https://api.anthropic.com/v1/messages"
+MODEL = os.environ.get("LENSGUARD_MODEL", "claude-sonnet-5-5")
+MAX_FRAMES = 12
+MAX_FRAME_BYTES = 1_500_000
+
+app = Flask(__name__, static_folder=os.path.join(HERE, "static"))
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
+
+SYSTEM_PROMPT = """You are a visual inspection assistant that helps people protect their privacy by \
+spotting recording devices worn on a person. You examine a single video frame.
+
+Look for:
+1. Smart / AI glasses (e.g. camera-equipped eyewear: a small lens or LED on the frame front, \
+thick temples with sensors/microphones, a camera module near the hinge or bridge). \
+Ordinary prescription glasses and sunglasses are NOT smart glasses.
+2. Other small camera candidates on or near the person: pinhole lens on buttons, pens, \
+badges, hats, necklaces, bags, watches, or clothing.
+
+Rules:
+- Never identify who the person is and never describe their face beyond what is needed to \
+locate eyewear.
+- Be honest about uncertainty. Use low confidence when the view is blurry, small, or ambiguous. \
+Do NOT claim certainty from one frame.
+- Coordinates are normalized 0-1 relative to the image: x,y = top-left corner, w,h = size.
+- If no person or no candidate is visible, say so.
+
+Reply with ONLY a JSON object, no prose, in this schema:
+{
+  "person_visible": bool,
+  "glasses": {"worn": bool, "kind": "none|regular|sunglasses|smart_glasses_suspected|smart_glasses_likely",
+              "confidence": 0-1, "bbox": {"x":0,"y":0,"w":0,"h":0} or null, "evidence": "short"},
+  "camera_candidates": [
+    {"where": "short location, e.g. 'left collar button'", "kind": "pinhole|lens|led|unknown",
+     "confidence": 0-1, "bbox": {"x":0,"y":0,"w":0,"h":0}, "evidence": "short"}
+  ],
+  "image_quality": "good|fair|poor",
+  "notes": "short"
+}"""
+
+
+def extract_json(text: str):
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", text, re.S)
+        if m:
+            return json.loads(m.group(0))
+        raise
+
+
+def call_claude(api_key: str, jpeg_b64: str) -> dict:
+    body = {
+        "model": MODEL,
+        "max_tokens": 900,
+        "system": SYSTEM_PROMPT,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/jpeg", "data": jpeg_b64},
+                    },
+                    {"type": "text", "text": "Analyze this frame. JSON only."},
+                ],
+            }
+        ],
+    }
+    req = urllib.request.Request(
+        API_URL,
+        data=json.dumps(body).encode(),
+        headers={
+            "content-type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    return extract_json(text)
+
+
+def mock_result(i: int) -> dict:
+    rnd = random.Random(i)
+    suspicious = rnd.random() > 0.4
+    return {
+        "person_visible": True,
+        "glasses": {
+            "worn": True,
+            "kind": "smart_glasses_suspected" if suspicious else "regular",
+            "confidence": round(rnd.uniform(0.45, 0.8), 2) if suspicious else 0.8,
+            "bbox": {"x": 0.38, "y": 0.18, "w": 0.24, "h": 0.1},
+            "evidence": "MOCK: 데모 데이터입니다 (API 키 없음).",
+        },
+        "camera_candidates": (
+            [
+                {
+                    "where": "MOCK: 가슴 단추",
+                    "kind": "pinhole",
+                    "confidence": 0.4,
+                    "bbox": {"x": 0.47, "y": 0.52, "w": 0.06, "h": 0.06},
+                    "evidence": "MOCK 데모",
+                }
+            ]
+            if suspicious
+            else []
+        ),
+        "image_quality": "fair",
+        "notes": "MOCK 모드",
+    }
+
+
+@app.get("/")
+def index():
+    return send_from_directory(app.static_folder, "index.html")
+
+
+@app.get("/api/status")
+def status():
+    return jsonify({"mock": not bool(os.environ.get("ANTHROPIC_API_KEY")), "model": MODEL})
+
+
+@app.post("/api/analyze")
+def analyze():
+    payload = request.get_json(silent=True) or {}
+    frames = payload.get("frames")
+    if not isinstance(frames, list) or not frames:
+        return jsonify({"error": "frames 배열이 필요합니다."}), 400
+    if len(frames) > MAX_FRAMES:
+        return jsonify({"error": f"한 번에 최대 {MAX_FRAMES}프레임까지 가능합니다."}), 400
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    results = []
+    for i, f in enumerate(frames):
+        b64 = f.split(",", 1)[-1] if isinstance(f, str) else ""
+        try:
+            raw = base64.b64decode(b64, validate=True)
+        except Exception:
+            results.append({"index": i, "error": "잘못된 이미지 데이터"})
+            continue
+        if len(raw) > MAX_FRAME_BYTES:
+            results.append({"index": i, "error": "프레임이 너무 큽니다 (1.5MB 초과)"})
+            continue
+        try:
+            r = call_claude(api_key, b64) if api_key else mock_result(i)
+            r["index"] = i
+            results.append(r)
+        except urllib.error.HTTPError as e:
+            results.append({"index": i, "error": f"API 오류 {e.code}"})
+        except Exception as e:  # noqa: BLE001
+            results.append({"index": i, "error": f"분석 실패: {type(e).__name__}"})
+    return jsonify({"mock": not bool(api_key), "results": results})
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
