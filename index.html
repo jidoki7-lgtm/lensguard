@@ -125,7 +125,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const CFG = { N_FRAMES: 12, STAGE1_W: 1024, HI_W: 1920, MAX_GLASSES_JOBS: 6, MAX_CAM_JOBS: 7,
+const CFG = { N_FRAMES: 6, STAGE1_W: 1024, HI_W: 1920, MAX_GLASSES_JOBS: 6, MAX_CAM_JOBS: 7,
               CROP_OUT: 768, GLINT_TOP: 8, SCAN_SEC: 12 };
 
 // PWA: 서비스 워커 등록 (HTTPS 또는 localhost에서만 동작)
@@ -149,7 +149,6 @@ function validBox(b){
   w = Math.min(w, 1 - x); h = Math.min(h, 1 - y);
   return (w > 0.002 && h > 0.002) ? {x, y, w, h} : null;
 }
-// 잘라낸 영역(rect) 안의 상대 좌표 box를 원본 프레임 기준 좌표로 되돌린다.
 const mapBox = (b, rect) => ({ x: rect.x + b.x * rect.w, y: rect.y + b.y * rect.h, w: b.w * rect.w, h: b.h * rect.h });
 
 function scaleToWidth(src, maxW){
@@ -161,11 +160,6 @@ function scaleToWidth(src, maxW){
   return c;
 }
 
-/**
-- 정규화 박스(box) 주변을 잘라낸다.
-- pad: 박스 크기 대비 여백 비율, minPx: 원본 픽셀 기준 최소 한 변, square: 정사각형으로.
-- 반환: { canvas, rect(원본 대비 정규화 좌표) }
- */
 function cropNorm(src, box, { pad = 0.3, minPx = 0, maxOut = CFG.CROP_OUT, square = false, maxUp = 1.5 } = {}){
   const W = src.width, H = src.height;
   const cx = (box.x + box.w / 2) * W, cy = (box.y + box.h / 2) * H;
@@ -197,9 +191,10 @@ function drawBox(ctx, c, b, color, label){
 }
 function zoom(c, text){
   const big = $('big'); big.width = c.width; big.height = c.height; big.getContext('2d').drawImage(c, 0, 0);
-  $('cap').textContent = text \vert{}\vert{} '';$('dlg').showModal();
+  $('cap').textContent = text || '';
+  $('dlg').showModal();
 }
-$('dlg').onclick = () =>$('dlg').close();
+$('dlg').onclick = () => $('dlg').close();
 
 fetch('/api/status').then(r => r.json()).then(s => {
   $('mode').textContent = s.mock ? '⚠ 데모(MOCK) 모드: API 키가 없어 가짜 결과가 표시됩니다' : '모델: ' + s.model;
@@ -208,10 +203,11 @@ fetch('/api/status').then(r => r.json()).then(s => {
 /* 탭 */
 function setTab(n){
   $('paneN').hidden = !n; $('paneF').hidden = n;
-  $('tabN').classList.toggle('on', n);$('tabF').classList.toggle('on', !n);
+  $('tabN').classList.toggle('on', n); $('tabF').classList.toggle('on', !n);
   if (n) stopCam();
 }
-$('tabN').onclick = () => setTab(true);$('tabF').onclick = () => setTab(false);
+$('tabN').onclick = () => setTab(true);
+$('tabF').onclick = () => setTab(false);
 
 /* ============================ 일반 분석 (1차 → 확대 재분석) ============================ */
 const KIND_KO = { none:'안경 없음', regular:'일반 안경', sunglasses:'선글라스',
@@ -245,15 +241,14 @@ async function extractFrames(f, n, onProgress){
   const out = [];
   for (let i = 0; i < n; i++){
     await seek(v, clamp((dur * (i + 0.5)) / n, 0, Math.max(0, dur - 0.05)));
-    const hi = scaleToWidth(v, CFG.HI_W);                 // 확대용 고해상도 원본
-    const lo = scaleToWidth(hi, CFG.STAGE1_W);            // 1차 분석용 축소본
+    const hi = scaleToWidth(v, CFG.HI_W);
+    const lo = scaleToWidth(hi, CFG.STAGE1_W);
     out.push({ hi, dataUrl: lo.toDataURL('image/jpeg', 0.85) });
     onProgress && onProgress((i + 1) / n);
   }
   return out;
 }
 
-/* 1차 결과에서 확대해서 다시 볼 영역을 고른다. */
 function buildJobs(frames, results){
   const gl = [], cam = [];
   const fallbackFaceBox = { x: 0.25, y: 0.14, w: 0.5, h: 0.34 };
@@ -316,11 +311,10 @@ $('go').onclick = async () => {
   } catch (err){
     $('msg').textContent = '오류: ' + err.message;
   } finally {
-    $('go').disabled = false; setTimeout(() =>$('barw').hidden = true, 500);
+    $('go').disabled = false; setTimeout(() => $('barw').hidden = true, 500);
   }
 };
 
-/* 프레임별 안경 판정 = 1차 결과 + (있으면) 확대 재분석 결과 */
 function glassesPerFrame(){
   return S.frames.map((f, i) => {
     const r = S.results[i];
@@ -401,3 +395,292 @@ function renderNormal(){
       esc(j.res.evidence || '') + '</span></li>').join('') + '</ul>';
   }
   if (camRejected > 0) h += '<p class="note" style="margin:4px 0 0">1차에서 의심했던 ' + camRejected + '곳은 확대해 보니 카메라로 보이지 않았습니다.</p>';
+  const badList = S.results.filter(r => r && r.error);
+  if (badList.length){
+    h += '<p class="note">' + badList.length + '개 프레임은 분석에 실패했습니다. (사유: ' + esc(badList[0].error) + ')</p>';
+  }
+  const poor = ok.filter(r => r.image_quality === 'poor').length;
+  if (poor) h += '<p class="note">화질이 낮은 프레임이 ' + poor + '장 있어 결과가 부정확할 수 있습니다.</p>';
+  const rf = S.jobs.filter(j => j.res && j.res.error).length;
+  if (rf) h += '<p class="note">확대 재분석 ' + rf + '건이 실패했습니다.</p>';
+  $('sum').innerHTML = h;
+
+  const z = $('zgrid'); z.innerHTML = '';
+  if (!S.jobs.length) z.innerHTML = '<p class="note">확대해서 볼 의심 부위가 없었습니다.</p>';
+  S.jobs.forEach(j => {
+    const c = document.createElement('canvas'); c.width = j.crop.width; c.height = j.crop.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(j.crop, 0, 0);
+    const res = j.res && !j.res.error ? j.res : null;
+    if (res && validBox(res.lens_bbox)) drawBox(ctx, c, validBox(res.lens_bbox), '#ff3b30', '');
+    let t = '<b>프레임 ' + (j.frame + 1) + ' · ' + (j.kind === 'glasses' ? '안경' : esc(j.label)) + '</b><br>';
+    if (!res) t += '<span class="note">' + esc(j.res ? j.res.error : '결과 없음') + '</span>';
+    else if (j.kind === 'glasses') t += (KIND_KO[res.kind] || esc(res.kind)) + ' ' + Math.round(conf01(res.confidence) * 100) + '%<br><span class="note">' + esc(res.evidence || '') + '</span>';
+    else t += (IS_CAM_KO[res.is_camera] || '') + ' ' + Math.round(conf01(res.confidence) * 100) + '% · ' + esc(res.object || '') + '<br><span class="note">' + esc(res.evidence || '') + '</span>';
+    const d = document.createElement('div'); d.className = 'zc'; d.appendChild(c);
+    const tt = document.createElement('div'); tt.className = 't'; tt.innerHTML = t; d.appendChild(tt);
+    d.onclick = () => zoom(c, tt.textContent); z.appendChild(d);
+  });
+
+  const grid = $('grid'); grid.innerHTML = '';
+  const lensByFrame = {};
+  gf.forEach(g => { if (g.lens) lensByFrame[g.i] = g.lens; });
+  S.frames.forEach((f, i) => {
+    const r = S.results[i];
+    const src = f.hi; const sc = Math.min(1, 640 / src.width);
+    const c = document.createElement('canvas'); c.width = Math.round(src.width * sc); c.height = Math.round(src.height * sc);
+    const ctx = c.getContext('2d'); ctx.drawImage(src, 0, 0, c.width, c.height);
+    if (r && !r.error){
+      drawBox(ctx, c, r.glasses && validBox(r.glasses.bbox), '#ff8a5c', r.glasses && r.glasses.worn ? (KIND_KO[r.glasses.kind] || '') : '');
+      (r.camera_candidates || []).forEach(k => drawBox(ctx, c, validBox(k.bbox), '#ffd23f', k.where));
+      if (lensByFrame[i]) drawBox(ctx, c, lensByFrame[i], '#ff3b30', '렌즈?');
+    }
+    const d = document.createElement('div'); d.className = 'frame';
+    d.innerHTML = '<span class="n">' + (i + 1) + '</span>'; d.appendChild(c);
+    d.onclick = () => zoom(c, !r ? '' : r.error ? r.error : (r.notes || '') + (r.glasses && r.glasses.evidence ? ' — ' + r.glasses.evidence : ''));
+    grid.appendChild(d);
+  });
+}
+
+/* ============================ 플래시 스캔 (렌즈 반사광) ============================ */
+
+function detectGlints(data, w, h, opt = {}){
+  const R = opt.R ?? 10, thr = opt.thr ?? 225, minContrast = opt.minContrast ?? 70;
+  const minArea = opt.minArea ?? 2, maxArea = opt.maxArea ?? Math.max(12, Math.round(w * h * 0.0006));
+  const n = w * h, Y = new Uint8ClampedArray(n);
+  for (let i = 0; i < n; i++) Y[i] = (data[4*i] * 77 + data[4*i+1] * 150 + data[4*i+2] * 29) >> 8;
+
+  const W1 = w + 1, I = new Uint32Array(W1 * (h + 1));
+  for (let y = 0; y < h; y++){
+    let row = 0;
+    for (let x = 0; x < w; x++){ row += Y[y*w + x]; I[(y+1)*W1 + x+1] = I[y*W1 + x+1] + row; }
+  }
+  const localMean = (x, y) => {
+    const x0 = Math.max(0, x - R), x1 = Math.min(w, x + R + 1), y0 = Math.max(0, y - R), y1 = Math.min(h, y + R + 1);
+    const s = I[y1*W1 + x1] - I[y0*W1 + x1] - I[y1*W1 + x0] + I[y0*W1 + x0];
+    return s / ((x1 - x0) * (y1 - y0));
+  };
+
+  const mask = new Uint8Array(n);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    const k = y*w + x;
+    if (Y[k] >= thr && Y[k] - localMean(x, y) >= minContrast) mask[k] = 1;
+  }
+
+  const blobs = [], stack = new Int32Array(n);
+  for (let s = 0; s < n; s++){
+    if (mask[s] !== 1) continue;
+    let sp = 0, area = 0, sx = 0, sy = 0, sY = 0, peak = 0, minx = w, maxx = 0, miny = h, maxy = 0;
+    stack[sp++] = s; mask[s] = 2;
+    while (sp){
+      const k = stack[--sp], x = k % w, y = (k / w) | 0;
+      area++; sx += x; sy += y; sY += Y[k]; if (Y[k] > peak) peak = Y[k];
+      if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+      if (x > 0 && mask[k-1] === 1){ mask[k-1] = 2; stack[sp++] = k-1; }
+      if (x < w-1 && mask[k+1] === 1){ mask[k+1] = 2; stack[sp++] = k+1; }
+      if (y > 0 && mask[k-w] === 1){ mask[k-w] = 2; stack[sp++] = k-w; }
+      if (y < h-1 && mask[k+w] === 1){ mask[k+w] = 2; stack[sp++] = k+w; }
+    }
+    if (area < minArea || area > maxArea) continue;
+    const bw = maxx - minx + 1, bh = maxy - miny + 1;
+    const fill = area / (bw * bh), aspect = Math.min(bw, bh) / Math.max(bw, bh);
+    if (fill < 0.45 || aspect < 0.5) continue;
+    const cx = sx / area, cy = sy / area;
+    const contrast = sY / area - localMean(Math.round(cx), Math.round(cy));
+    const sizeF = (area <= 3 || area > 60) ? 0.7 : 1;
+    const score = Math.min(1, contrast / 200) * (0.5 + 0.5 * fill) * sizeF;
+    blobs.push({ cx: (cx + 0.5) / w, cy: (cy + 0.5) / h, area, contrast, peak, fill, score });
+  }
+  return blobs.sort((a, b) => b.score - a.score).slice(0, 40);
+}
+
+class GlintScan {
+  constructor(opt = {}){
+    this.radius = opt.radius ?? 0.07; this.gap = opt.gap ?? 2; this.maxTracks = opt.maxTracks ?? 60;
+    this.tracks = []; this.frame = 0; this.nextId = 1;
+    this.work = document.createElement('canvas'); this.nat = document.createElement('canvas');
+  }
+  feed(source, { track = true } = {}){
+    const sw = source.videoWidth || source.width, sh = source.videoHeight || source.height;
+    if (!sw || !sh) return [];
+    this.nat.width = sw; this.nat.height = sh;
+    this.nat.getContext('2d').drawImage(source, 0, 0, sw, sh);
+    const ww = 480, wh = Math.max(1, Math.round(ww * sh / sw));
+    this.work.width = ww; this.work.height = wh;
+    const wctx = this.work.getContext('2d', { willReadFrequently: true });
+    wctx.drawImage(this.nat, 0, 0, ww, wh);
+    const blobs = detectGlints(wctx.getImageData(0, 0, ww, wh).data, ww, wh);
+    if (track) this._update(blobs);
+    return blobs;
+  }
+  _update(blobs){
+    const f = this.frame++, used = new Set();
+    blobs.slice(0, 30).forEach(b => {
+      if (b.score < 0.15) return;
+      let best = null, bd = this.radius;
+      this.tracks.forEach(t => {
+        if (used.has(t) || f - t.last > this.gap) return;
+        const d = Math.hypot(t.cx - b.cx, t.cy - b.cy);
+        if (d < bd){ bd = d; best = t; }
+      });
+      if (best){
+        best.len++; best.last = f; best.cx = b.cx; best.cy = b.cy; used.add(best);
+        if (b.score > best.bestScore){ best.bestScore = b.score; best.shot = this._shot(b); best.blob = b; }
+      } else {
+        const t = { id: this.nextId++, first: f, last: f, len: 1, cx: b.cx, cy: b.cy, bestScore: b.score, blob: b, shot: this._shot(b) };
+        this.tracks.push(t); used.add(t);
+      }
+    });
+    if (this.tracks.length > this.maxTracks * 1.5){
+      this.tracks.sort((a, b) => b.bestScore - a.bestScore); this.tracks.length = this.maxTracks;
+    }
+  }
+  _shot(b){
+    const W = this.nat.width, size = Math.max(160, Math.round(W * 0.14));
+    const c = cropNorm(this.nat, { x: b.cx - 0.002, y: b.cy - 0.002, w: 0.004, h: 0.004 },
+                       { pad: 0, minPx: size, square: true, maxOut: 384, maxUp: 2 });
+    c.at = { x: (b.cx - c.rect.x) / c.rect.w, y: (b.cy - c.rect.y) / c.rect.h };
+    return c;
+  }
+  ranked(){
+    const life = l => l <= 1 ? 0.8 : l <= 8 ? 1.2 : l <= 16 ? 1.0 : 0.6;
+    return this.tracks.map(t => ({ t, rank: t.bestScore * life(t.len) })).sort((a, b) => b.rank - a.rank);
+  }
+}
+
+let cam = { stream: null, track: null, torch: false, scan: null, scanning: false, raf: 0, last: 0 };
+
+async function startCam(){
+  $('fmsg').textContent = '';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    $('fmsg').textContent = '이 브라우저에서는 카메라를 쓸 수 없습니다. 아래 "영상 선택"을 이용하세요.'; return;
+  }
+  try {
+    cam.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+  } catch (e){
+    $('fmsg').textContent = '카메라 권한이 필요합니다. 주소창의 자물쇠 → 권한에서 카메라를 허용해 주세요.'; return;
+  }
+  const v = $('liveVid'); v.srcObject = cam.stream; await v.play().catch(() => {});
+  $('liveBox').hidden = false; $('scanRow').hidden = false; $('camStart').hidden = true;
+  cam.track = cam.stream.getVideoTracks()[0];
+  const caps = (cam.track.getCapabilities && cam.track.getCapabilities()) || {};
+  if (caps.torch){
+    try { await cam.track.applyConstraints({ advanced: [{ torch: true }] }); cam.torch = true; } catch (e) { cam.torch = false; }
+  }
+  $('torchBtn').hidden = !caps.torch; $('torchBtn').textContent = cam.torch ? '🔦 플래시 켜짐' : '🔦 플래시 꺼짐';
+  if (!caps.torch) $('fmsg').textContent = '이 기기/브라우저는 앱에서 플래시를 켤 수 없습니다. 폰의 손전등을 직접 켜거나, 플래시로 찍은 영상을 선택하세요.';
+  cam.scan = new GlintScan();
+  liveLoop();
+}
+function stopCam(){
+  cancelAnimationFrame(cam.raf); cam.scanning = false;
+  if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
+  cam.stream = null; cam.track = null;
+  $('liveBox').hidden = true; $('scanRow').hidden = true; $('camStart').hidden = false; $('torchBtn').hidden = true;
+}
+$('camStart').onclick = startCam;
+$('camStop').onclick = stopCam;
+$('torchBtn').onclick = async () => {
+  try { await cam.track.applyConstraints({ advanced: [{ torch: !cam.torch }] }); cam.torch = !cam.torch; } catch (e) {}
+  $('torchBtn').textContent = cam.torch ? '🔦 플래시 켜짐' : '🔦 플래시 꺼짐';
+};
+
+function liveLoop(){
+  cam.raf = requestAnimationFrame(liveLoop);
+  const now = performance.now();
+  if (now - cam.last < 120) return;
+  cam.last = now;
+  const v = $('liveVid'), ov = $('liveOv');
+  if (!v.videoWidth) return;
+  const blobs = cam.scan.feed(v, { track: cam.scanning });
+  ov.width = ov.clientWidth || 320; ov.height = ov.clientHeight || 180;
+  const ctx = ov.getContext('2d'); ctx.clearRect(0, 0, ov.width, ov.height);
+  blobs.filter(b => b.score >= 0.25).slice(0, 8).forEach(b => {
+    ctx.beginPath(); ctx.arc(b.cx * ov.width, b.cy * ov.height, 12, 0, Math.PI * 2);
+    ctx.lineWidth = 3; ctx.strokeStyle = '#ff3b30'; ctx.stroke();
+  });
+}
+
+$('scanBtn').onclick = async () => {
+  if (cam.scanning || !cam.scan) return;
+  cam.scan = new GlintScan(); cam.scanning = true;
+  $('scanBtn').disabled = true; $('fbarw').hidden = false; $('fout').hidden = true;
+  const t0 = performance.now();
+  while (performance.now() - t0 < CFG.SCAN_SEC * 1000){
+    const p = (performance.now() - t0) / (CFG.SCAN_SEC * 1000);
+    $('fbar').style.width = (p * 100) + '%';
+    $('fmsg').textContent = '스캔 중… 폰을 천천히 훑어주세요 (' + Math.max(0, Math.ceil(CFG.SCAN_SEC * (1 - p))) + '초)';
+    await sleep(200);
+  }
+  cam.scanning = false;
+  try { await finishScan(cam.scan); }
+  catch (e){ $('fmsg').textContent = '오류: ' + e.message; }
+  $('scanBtn').disabled = false; setTimeout(() => $('fbarw').hidden = true, 500);
+};
+
+$('flashFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('fout').hidden = true; $('fbarw').hidden = false; $('fbar').style.width = '0';
+  try {
+    const v = await loadVideo(f);
+    const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 5;
+    const n = clamp(Math.round(dur * 6), 12, 60), scan = new GlintScan({ gap: 2 });
+    for (let i = 0; i < n; i++){
+      await seek(v, clamp(dur * (i + 0.5) / n, 0, Math.max(0, dur - 0.05)));
+      scan.feed(v);
+      $('fbar').style.width = (i + 1) / n * 60 + '%';
+      $('fmsg').textContent = '영상에서 반사점 찾는 중… ' + (i + 1) + '/' + n;
+    }
+    await finishScan(scan);
+  } catch (err){ $('fmsg').textContent = '오류: ' + err.message; }
+  setTimeout(() => $('fbarw').hidden = true, 500);
+  e.target.value = '';
+};
+
+const SRC_KO = { camera_lens:'카메라 렌즈', eye:'눈(각막)', eyeglass_lens:'안경 렌즈', jewelry:'장신구',
+  metal_hardware:'금속 부품(단추·지퍼 등)', screen:'화면', glossy_surface:'광택 표면', other:'기타' };
+
+async function finishScan(scan){
+  const ranked = scan.ranked().filter(x => x.rank >= 0.2 && x.t.shot);
+  const top = ranked.slice(0, CFG.GLINT_TOP);
+  $('fout').hidden = false;
+  if (!top.length){
+    $('fsum').innerHTML = '<div class="verdict">반사점: <span class="lo">뚜렷한 렌즈형 반사 없음</span></div>' +
+      '<p class="note">어둡게 하고, 더 가까이(1~2m) 겨냥해서 위아래·좌우로 천천히 다시 훑어 보세요. 이것이 카메라가 없다는 뜻은 아닙니다.</p>';
+    $('fgrid').innerHTML = ''; $('fmsg').textContent = ''; return;
+  }
+  $('fmsg').textContent = '반사점 ' + top.length + '곳을 AI가 확대해서 확인하는 중…';
+  const res = await postJSON('/api/refine', {
+    crops: top.map(x => ({ image: x.t.shot.canvas.toDataURL('image/jpeg', 0.9), kind: 'glint' }))
+  });
+  const grid = $('fgrid'); grid.innerHTML = '';
+  const hits = [];
+  top.forEach((x, idx) => {
+    const r = (res.results && res.results[idx] && !res.results[idx].error) ? res.results[idx] : null;
+    const c = document.createElement('canvas'); c.width = x.t.shot.canvas.width; c.height = x.t.shot.canvas.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(x.t.shot.canvas, 0, 0);
+    const lb = r && validBox(r.lens_bbox);
+    if (lb) drawBox(ctx, c, lb, '#ff3b30', '');
+    else if (x.t.shot.at){
+      ctx.beginPath(); ctx.arc(x.t.shot.at.x * c.width, x.t.shot.at.y * c.height, 10, 0, Math.PI * 2);
+      ctx.lineWidth = 2; ctx.strokeStyle = '#ff3b30'; ctx.stroke();
+    }
+    const isHit = r && ['possible', 'likely'].includes(r.is_camera);
+    if (isHit) hits.push({ idx, r });
+    let t = '<b>반사점 ' + (idx + 1) + '</b><br>';
+    if (!r) t += '<span class="note">' + esc(res.results && res.results[idx] ? res.results[idx].error : '분석 실패') + '</span>';
+    else t += (SRC_KO[r.source] || esc(r.source || '')) + ' · ' + (IS_CAM_KO[r.is_camera] || '') + ' ' + Math.round(conf01(r.confidence) * 100) + '%<br><span class="note">' + esc(r.evidence || '') + '</span>';
+    const d = document.createElement('div'); d.className = 'zc'; d.appendChild(c);
+    const tt = document.createElement('div'); tt.className = 't'; tt.innerHTML = t; d.appendChild(tt);
+    d.onclick = () => zoom(c, tt.textContent); grid.appendChild(d);
+  });
+  $('fsum').innerHTML = hits.length
+    ? '<div class="verdict">의심 반사점: <span class="hi">' + hits.length + '건</span></div><ul>' +
+      hits.map(h => '<li><b>반사점 ' + (h.idx + 1) + '</b> · ' + (SRC_KO[h.r.source] || '') + ' · ' +
+      (IS_CAM_KO[h.r.is_camera] || '') + ' ' + Math.round(conf01(h.r.confidence) * 100) + '% <span class="note">' + esc(h.r.evidence || '') + '</span></li>').join('') + '</ul>'
+    : '<div class="verdict">반사점: <span class="lo">카메라 의심 반사 없음</span></div><p class="note">주요 반사점 ' + top.length + '곳을 확대해 봤지만 카메라 렌즈로 보이는 반사는 없었습니다.</p>';
+  $('fmsg').textContent = '';
+}
+</script>
+</body>
+</html>
