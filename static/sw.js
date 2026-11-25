@@ -1,5 +1,5 @@
 // LensGuard 서비스 워커: 앱 껍데기만 캐시하고, 분석 API는 항상 네트워크로 보낸다.
-const CACHE = 'lensguard-v1';
+const CACHE = 'lensguard-v2';
 const SHELL = [
   '/',
   '/static/manifest.webmanifest',
