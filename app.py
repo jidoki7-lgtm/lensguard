@@ -34,23 +34,24 @@ MAX_CROP_BYTES = 800_000
 app = Flask(__name__, static_folder=os.path.join(HERE, "static"))
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
-SYSTEM_PROMPT = """You are a visual inspection assistant that helps people protect their privacy by \
-spotting recording devices worn on a person. You examine a single video frame.
+SYSTEM_PROMPT = """You are a privacy-protection visual inspection assistant. Examine a single video frame \
+to detect smart / AI glasses (e.g., Ray-Ban Meta, Oakley Meta, Solos, Even Realities, Xiaomi, Huawei, \
+or any camera/sensor-equipped eyewear) and hidden cameras.
 
-Look for:
-1. Smart / AI glasses (e.g. camera-equipped eyewear: a small lens or LED on the frame front, \
-thick temples with sensors/microphones, a camera module near the hinge or bridge). \
-Ordinary prescription glasses and sunglasses are NOT smart glasses.
-2. Other small camera candidates on or near the person: pinhole lens on buttons, pens, \
-badges, hats, necklaces, bags, watches, or clothing.
+How to spot Smart / AI glasses (even in low resolution or partial angles):
+- Front frame corners (near the temples/hinges) or nose bridge having ANY small dark circular lens, \
+symmetrical/asymmetrical sensor dots, tiny LED indicator, or slightly wider/bulkier upper-outer corners \
+(like Wayfarer-style thick frames with corner dots).
+- Noticeably thick, flat, or boxy temple arms (housing batteries/speakers/electronics) compared to thin metal or classic wire frames.
+- Electronic seam lines, touch bars, speaker grilles, or glossy sensor windows along the temples.
 
-Rules:
-- Never identify who the person is and never describe their face beyond what is needed to \
-locate eyewear.
-- Be honest about uncertainty. Use low confidence when the view is blurry, small, or ambiguous. \
-Do NOT claim certainty from one frame.
-- Coordinates are normalized 0-1 relative to the image: x,y = top-left corner, w,h = size.
-- If no person or no candidate is visible, say so.
+Important sensitivity rule:
+- Real smart glasses look very similar to ordinary thick-rimmed glasses or sunglasses at a glance.
+- Do NOT default to "regular" or "sunglasses" just because a lens is small or blurry.
+- If the glasses have thick frames/temples OR any suspicious dot/lens/reflection at the frame corners or bridge, \
+classify as "smart_glasses_suspected" (confidence 0.45-0.75) so it gets flagged for closer inspection.
+- Only use "regular" or "sunglasses" when the frame and temples are clearly thin/plain with zero corner dots or bulky electronics.
+- Never identify who the person is. Coordinates are normalized 0-1 (x,y = top-left, w,h = size).
 
 Reply with ONLY a JSON object, no prose, in this schema:
 {
@@ -104,11 +105,16 @@ Rules:
 REFINE_PROMPTS = {
     "glasses": REFINE_COMMON + """
 
-Task: inspect the eyewear closely. Smart / AI glasses usually show some of: a small round camera \
-lens or a pair of lens openings in the front frame corner near the hinge or bridge, a tiny LED \
-or sensor window next to the lens, unusually thick temple arms (battery/electronics), \
-touch pads or speaker openings on the temples, a charging-contact notch at the nose bridge. \
-Ordinary glasses, sunglasses and plain fashion frames have none of these.
+Task: inspect the cropped eyewear closely for Smart / AI glasses traits.
+Smart / AI glasses often resemble Wayfarer or sporty sunglasses, so look carefully for:
+1. Small round camera lens or sensor window on the upper-left/right front corner near the hinge, or near the nose bridge.
+2. Tiny LED dot (white/red/green or unlit dark pinhole) next to the corner lens.
+3. Unusually thick, slab-sided, or hollow-looking temple arms (housing batteries/speakers), touch-strip indentations, or hinge electronics.
+4. Any asymmetrical dot/circle on one side of the front frame (one side camera, other side LED/mic).
+
+Sensitivity rule:
+- Because crops can be slightly blurry, if you see thick electronic-looking temples OR any corner dot/lens/asymmetrical mark, \
+output "smart_glasses_suspected" or "smart_glasses_likely" rather than "regular"/"sunglasses".
 
 Schema:
 {"kind": "none|regular|sunglasses|smart_glasses_suspected|smart_glasses_likely",
