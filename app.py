@@ -1,14 +1,14 @@
 """LensGuard 분석 서버.
 
-브라우저가 영상에서 뽑은 프레임(JPEG, base64)을 받아 Claude 비전 API로 분석하고
+브라우저가 영상에서 뽑은 프레임(JPEG, base64)을 받아 Gemini 비전 API로 분석하고
 스마트(AI) 안경 / 초소형 카메라 의심 위치를 JSON으로 돌려준다.
 
 - 프레임은 메모리에서만 처리하고 디스크에 저장하지 않는다.
 - 사람의 신원을 식별하지 않는다. 장비(안경, 렌즈) 유무와 위치만 본다.
-- ANTHROPIC_API_KEY 가 없으면 MOCK 모드로 동작한다 (UI 테스트용 가짜 결과).
+- GEMINI_API_KEY 가 없으면 MOCK 모드로 동작한다 (UI 테스트용 가짜 결과).
 
 실행:
-    export ANTHROPIC_API_KEY=sk-ant-...
+    export GEMINI_API_KEY=AIza...
     python3 app.py
 """
 import base64
@@ -17,14 +17,15 @@ import os
 import random
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, jsonify, request, send_from_directory
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = os.environ.get("LENSGUARD_MODEL", "claude-sonnet-5-5")
+API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+MODEL = os.environ.get("LENSGUARD_MODEL", "gemini-3.8-flash")
 MAX_FRAMES = 12
 MAX_FRAME_BYTES = 1_500_000
 MAX_CROPS = 16
@@ -150,38 +151,44 @@ Schema:
 }
 
 
-def call_claude(api_key: str, jpeg_b64: str, system: str = SYSTEM_PROMPT,
+def call_gemini(api_key: str, jpeg_b64: str, system: str = SYSTEM_PROMPT,
                 prompt: str = "Analyze this frame. JSON only.", max_tokens: int = 900) -> dict:
+    url = f"{API_BASE_URL}/{urllib.parse.quote(MODEL)}:generateContent?key={urllib.parse.quote(api_key)}"
     body = {
-        "model": MODEL,
-        "max_tokens": max_tokens,
-        "system": system,
-        "messages": [
+        "systemInstruction": {
+            "parts": [{"text": system}]
+        },
+        "contents": [
             {
                 "role": "user",
-                "content": [
+                "parts": [
                     {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": "image/jpeg", "data": jpeg_b64},
+                        "inlineData": {
+                            "mimeType": "image/jpeg",
+                            "data": jpeg_b64,
+                        }
                     },
-                    {"type": "text", "text": prompt},
+                    {"text": prompt},
                 ],
             }
         ],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "responseMimeType": "application/json",
+        },
     }
     req = urllib.request.Request(
-        API_URL,
+        url,
         data=json.dumps(body).encode(),
-        headers={
-            "content-type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
+        headers={"content-type": "application/json"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=60) as resp:
         data = json.loads(resp.read())
-    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+
+    candidates = data.get("candidates") or []
+    parts = ((candidates[0].get("content") or {}).get("parts")) if candidates else []
+    text = "".join(p.get("text", "") for p in (parts or []) if isinstance(p.get("text"), str))
     return extract_json(text)
 
 
@@ -256,7 +263,7 @@ def service_worker():
 
 @app.get("/api/status")
 def status():
-    return jsonify({"mock": not bool(os.environ.get("ANTHROPIC_API_KEY")), "model": MODEL})
+    return jsonify({"mock": not bool(os.environ.get("GEMINI_API_KEY")), "model": MODEL})
 
 
 @app.post("/api/analyze")
@@ -268,14 +275,14 @@ def analyze():
     if len(frames) > MAX_FRAMES:
         return jsonify({"error": f"한 번에 최대 {MAX_FRAMES}프레임까지 가능합니다."}), 400
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("GEMINI_API_KEY", "")
 
     def work(i, f):
         b64, err = decode_image(f)
         if err:
             return {"index": i, "error": err}
         try:
-            r = call_claude(api_key, b64) if api_key else mock_result(i)
+            r = call_gemini(api_key, b64) if api_key else mock_result(i)
             r["index"] = i
             return r
         except urllib.error.HTTPError as e:
@@ -299,7 +306,7 @@ def refine():
     if len(crops) > MAX_CROPS:
         return jsonify({"error": f"한 번에 최대 {MAX_CROPS}개 영역까지 가능합니다."}), 400
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("GEMINI_API_KEY", "")
 
     def work(i, c):
         kind = c.get("kind") if isinstance(c, dict) else None
@@ -310,7 +317,7 @@ def refine():
             return {"index": i, "error": err}
         try:
             if api_key:
-                r = call_claude(api_key, b64, system=REFINE_PROMPTS[kind],
+                r = call_gemini(api_key, b64, system=REFINE_PROMPTS[kind],
                                 prompt="Analyze this close-up crop. JSON only.", max_tokens=600)
             else:
                 r = mock_refine(kind, i)
