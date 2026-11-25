@@ -71,7 +71,7 @@
         <label class="btn">📹 영상 촬영<input id="rec" type="file" accept="video/*" capture="environment"></label>
         <label class="btn alt">📁 영상 선택<input id="pick" type="file" accept="video/*"></label>
       </div>
-      <p class="note" style="margin:10px 0 0">5~10초, 얼굴과 안경을 화면에 크게, 밝은 곳에서 천천히 좌우로 돌려가며 촬영하면 정확도가 올라갑니다. 1차로 전체를 보고, 의심 부위는 확대해서 한 번 더 분석합니다.</p>
+      <p class="note" style="margin:10px 0 0">5~10초, 얼굴과 안경이 보이도록 밝은 곳에서 촬영하면 정확도가 올라갑니다. 1차 분석 후 의심 부위와 얼굴 상단을 자동 확대해 한 번 더 정밀 검사합니다.</p>
       <video id="vid" controls playsinline hidden></video>
       <div class="row" style="margin-top:12px">
         <button id="go" disabled>분석 시작</button>
@@ -81,7 +81,7 @@
     </div>
     <div id="out" hidden>
       <div class="card" id="sum"></div>
-      <div class="card"><b>🔍 확대 재분석</b> <span class="note">(의심 부위를 잘라 다시 본 결과 · 탭하면 크게 보기)</span><div class="grid" id="zgrid"></div></div>
+      <div class="card"><b>🔍 확대 재분석</b> <span class="note">(의심 부위·얼굴 상단을 잘라 다시 본 결과 · 탭하면 크게 보기)</span><div class="grid" id="zgrid"></div></div>
       <div class="card"><b>프레임별 결과</b> <span class="note">(탭하면 크게 보기)</span><div class="grid" id="grid"></div></div>
     </div>
   </section>
@@ -125,10 +125,9 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const CFG = { N_FRAMES: 6, STAGE1_W: 1024, HI_W: 1920, MAX_GLASSES_JOBS: 6, MAX_CAM_JOBS: 7,
-              CROP_OUT: 768, GLINT_TOP: 8, SCAN_SEC: 12 };
+const CFG = { N_FRAMES: 8, STAGE1_W: 1024, HI_W: 1920, MAX_GLASSES_JOBS: 8, MAX_CAM_JOBS: 6,
+              CROP_OUT: 896, GLINT_TOP: 8, SCAN_SEC: 12 };
 
-// PWA: 서비스 워커 등록 (HTTPS 또는 localhost에서만 동작)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
@@ -138,7 +137,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const num = (v, d = 0) => { v = Number(v); return Number.isFinite(v) ? v : d; };
 const conf01 = (v, d = 0) => clamp(num(v, d), 0, 1);
-const levelOf = c => c >= .7 ? 'hi' : c >= .4 ? 'md' : 'lo';
+const levelOf = c => c >= .68 ? 'hi' : c >= .38 ? 'md' : 'lo';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function validBox(b){
@@ -160,7 +159,7 @@ function scaleToWidth(src, maxW){
   return c;
 }
 
-function cropNorm(src, box, { pad = 0.3, minPx = 0, maxOut = CFG.CROP_OUT, square = false, maxUp = 1.5 } = {}){
+function cropNorm(src, box, { pad = 0.3, minPx = 0, maxOut = CFG.CROP_OUT, square = false, maxUp = 2.0 } = {}){
   const W = src.width, H = src.height;
   const cx = (box.x + box.w / 2) * W, cy = (box.y + box.h / 2) * H;
   let w = box.w * W * (1 + 2 * pad), h = box.h * H * (1 + 2 * pad);
@@ -209,7 +208,7 @@ function setTab(n){
 $('tabN').onclick = () => setTab(true);
 $('tabF').onclick = () => setTab(false);
 
-/* ============================ 일반 분석 (1차 → 확대 재분석) ============================ */
+/* ============================ 일반 분석 (1차 → 다중 확대 재분석) ============================ */
 const KIND_KO = { none:'안경 없음', regular:'일반 안경', sunglasses:'선글라스',
   smart_glasses_suspected:'스마트 안경 의심', smart_glasses_likely:'스마트 안경 가능성 높음' };
 const CAM_KO = { pinhole:'핀홀 렌즈', lens:'렌즈', led:'LED/표시등', unknown:'불명' };
@@ -243,41 +242,53 @@ async function extractFrames(f, n, onProgress){
     await seek(v, clamp((dur * (i + 0.5)) / n, 0, Math.max(0, dur - 0.05)));
     const hi = scaleToWidth(v, CFG.HI_W);
     const lo = scaleToWidth(hi, CFG.STAGE1_W);
-    out.push({ hi, dataUrl: lo.toDataURL('image/jpeg', 0.85) });
+    out.push({ hi, dataUrl: lo.toDataURL('image/jpeg', 0.86) });
     onProgress && onProgress((i + 1) / n);
   }
   return out;
 }
 
+/* 원거리 인식을 위한 다중 크롭 + 유효 프레임 우선순위 빌드 */
 function buildJobs(frames, results){
   const gl = [], cam = [];
-  const fallbackFaceBox = { x: 0.25, y: 0.14, w: 0.5, h: 0.34 };
+  const wideEyeBand = { x: 0.15, y: 0.12, w: 0.70, h: 0.32 };
+  const centerUpper = { x: 0.28, y: 0.10, w: 0.44, h: 0.38 };
 
   results.forEach((r, i) => {
     if (!r || r.error) return;
     const g = r.glasses || {};
-    let gb = validBox(g.bbox);
-
-    if (!gb && (g.worn || isSmart(g.kind) || r.person_visible)){
-      gb = fallbackFaceBox;
-    }
+    const gb = validBox(g.bbox);
+    const qBonus = r.image_quality === 'good' ? 0.4 : (r.image_quality === 'fair' ? 0.2 : -0.2);
 
     if (gb){
-      const prio = (isSmart(g.kind) ? 3 : (g.worn ? 1.5 : 0.8)) + conf01(g.confidence) * 0.5;
-      gl.push({ frame: i, kind: 'glasses', box: gb, prio, label: '안경' });
+      // 안경 위치가 잡힌 경우: 밀착 크롭 + 주변(다리/힌지 포함) 와이드 크롭
+      const basePrio = (isSmart(g.kind) ? 3.5 : (g.worn ? 2.0 : 1.0)) + conf01(g.confidence) * 0.6 + qBonus;
+      gl.push({ frame: i, kind: 'glasses', box: gb, pad: 0.45, prio: basePrio, label: '안경(정밀)' });
+      // 원거리에서 안경 박스가 작게 잡혔을 때 다리/관자놀이까지 크게 확보
+      if (gb.w < 0.28){
+        gl.push({ frame: i, kind: 'glasses', box: gb, pad: 0.85, prio: basePrio - 0.15, label: '안경(주변포함)' });
+      }
+    } else if (g.worn || isSmart(g.kind) || r.person_visible){
+      // 원거리라 안경 박스를 못 잡은 경우: 얼굴 상단 & 눈 라인 다중 크롭
+      const basePrio = (isSmart(g.kind) ? 2.8 : (g.worn ? 1.6 : 0.9)) + qBonus;
+      gl.push({ frame: i, kind: 'glasses', box: centerUpper, pad: 0.15, prio: basePrio, label: '얼굴 상단' });
+      gl.push({ frame: i, kind: 'glasses', box: wideEyeBand, pad: 0.10, prio: basePrio - 0.1, label: '눈·안경 라인' });
     }
+
     (r.camera_candidates || []).forEach(c => {
       const b = validBox(c.bbox);
-      if (b && conf01(c.confidence) >= 0.2)
-        cam.push({ frame: i, kind: 'camera', box: b, prio: 1 + conf01(c.confidence), label: c.where || '카메라 후보' });
+      if (b && conf01(c.confidence) >= 0.2){
+        cam.push({ frame: i, kind: 'camera', box: b, prio: 1 + conf01(c.confidence) + qBonus, label: c.where || '카메라 후보' });
+      }
     });
   });
+
   const top = (a, k) => a.sort((x, y) => y.prio - x.prio).slice(0, k);
   const jobs = [...top(gl, CFG.MAX_GLASSES_JOBS), ...top(cam, CFG.MAX_CAM_JOBS)];
   jobs.forEach(j => {
     const src = frames[j.frame].hi;
     const c = j.kind === 'glasses'
-      ? cropNorm(src, j.box, { pad: 0.35, minPx: 256 })
+      ? cropNorm(src, j.box, { pad: j.pad ?? 0.45, minPx: 320 })
       : cropNorm(src, j.box, { pad: 0.5, minPx: Math.round(src.width * 0.12), square: true });
     j.crop = c.canvas; j.rect = c.rect;
   });
@@ -291,9 +302,9 @@ async function analyzeNormal(frames, setStatus){
   const jobs = buildJobs(frames, results);
   let mock = a.mock;
   if (jobs.length){
-    setStatus('의심 부위 확대 재분석 중… (' + jobs.length + '곳)', 0.7);
+    setStatus('의심 부위·원거리 얼굴 확대 재분석 중… (' + jobs.length + '곳)', 0.7);
     const r = await postJSON('/api/refine', {
-      crops: jobs.map(j => ({ image: j.crop.toDataURL('image/jpeg', 0.9), kind: j.kind })) });
+      crops: jobs.map(j => ({ image: j.crop.toDataURL('image/jpeg', 0.92), kind: j.kind })) });
     r.results.forEach((res, k) => { jobs[k].res = res; });
     mock = mock || r.mock;
   }
@@ -315,13 +326,19 @@ $('go').onclick = async () => {
   }
 };
 
+/* 프레임별 안경 판정 = 1차 결과 + 해당 프레임의 모든 확대 재분석 결과 중 가장 의심도 높은 판정 */
 function glassesPerFrame(){
   return S.frames.map((f, i) => {
     const r = S.results[i];
     if (!r || r.error) return null;
     const g = r.glasses || {};
-    const j = S.jobs.find(j => j.frame === i && j.kind === 'glasses' && j.res && !j.res.error);
-    const refinedKind = j && j.res.kind ? j.res.kind : null;
+    const frameJobs = S.jobs.filter(j => j.frame === i && j.kind === 'glasses' && j.res && !j.res.error);
+    const smartJob = frameJobs
+      .filter(j => isSmart(j.res.kind))
+      .sort((a, b) => conf01(b.res.confidence) - conf01(a.res.confidence))[0];
+    const bestJob = smartJob || frameJobs.sort((a, b) => conf01(b.res.confidence) - conf01(a.res.confidence))[0];
+
+    const refinedKind = bestJob && bestJob.res.kind ? bestJob.res.kind : null;
     const worn = Boolean(g.worn || (refinedKind && refinedKind !== 'none'));
     if (!worn) return null;
 
@@ -334,18 +351,19 @@ function glassesPerFrame(){
       ev: g.evidence || '',
       bbox: validBox(g.bbox) || { x: 0.25, y: 0.14, w: 0.5, h: 0.34 }
     };
-    if (j){
+
+    if (bestJob){
       o.refined = true;
-      if (isSmart(o.kind) && o.conf >= 0.6 && refinedKind && !isSmart(refinedKind)){
+      if (isSmart(o.kind) && o.conf >= 0.55 && refinedKind && !isSmart(refinedKind)){
         o.kind = 'smart_glasses_suspected';
         o.conf = Math.min(o.conf, 0.65);
       } else if (refinedKind){
         o.kind = refinedKind;
-        o.conf = conf01(j.res.confidence, o.conf);
+        o.conf = conf01(bestJob.res.confidence, o.conf);
       }
-      o.ev = j.res.evidence || o.ev;
-      const lb = j.res.lens_found ? validBox(j.res.lens_bbox) : null;
-      if (lb) o.lens = mapBox(lb, j.rect);
+      o.ev = bestJob.res.evidence || o.ev;
+      const lb = bestJob.res.lens_found ? validBox(bestJob.res.lens_bbox) : null;
+      if (lb) o.lens = mapBox(lb, bestJob.rect);
     }
     return o;
   }).filter(Boolean);
@@ -355,12 +373,26 @@ function renderNormal(){
   $('out').hidden = false;
   const ok = S.results.filter(r => !r.error);
   const gf = glassesPerFrame();
-  const sus = gf.filter(g => isSmart(g.kind) && g.conf >= 0.4);
+  // 원거리 민감도를 높이기 위해 0.35 이상 의심 프레임을 모두 집계
+  const sus = gf.filter(g => isSmart(g.kind) && g.conf >= 0.35);
+
   let kind = 'none', score = 0, note = '';
   if (sus.length){
     const best = sus.reduce((a, b) => b.conf > a.conf ? b : a);
-    kind = best.kind; score = best.conf;
-    if (sus.length === 1 && gf.length >= 6){ score = Math.min(score, 0.68); note = '1개 프레임에서만 의심되어 신뢰도를 일부 조정했습니다.'; }
+    const avgConf = sus.reduce((s, g) => s + g.conf, 0) / sus.length;
+    const ratio = gf.length ? sus.length / gf.length : 0;
+
+    kind = best.kind;
+    // 여러 프레임에서 반복 포착되면 누적 가산점을 부여해 원거리 흔들림 보완
+    const multiBonus = sus.length >= 2 ? Math.min(0.15, ratio * 0.18) : 0;
+    score = clamp(Math.max(best.conf, avgConf) + multiBonus, 0.4, 0.96);
+
+    if (sus.length === 1 && gf.length >= 5){
+      score = Math.min(score, 0.65);
+      note = '원거리·각도 변화로 1개 프레임에서만 의심 특징이 포착되었습니다.';
+    } else if (sus.length >= 2){
+      note = '총 ' + gf.length + '개 안경 프레임 중 ' + sus.length + '개 프레임에서 스마트 안경 의심 특징이 누적 포착되었습니다.';
+    }
   } else if (gf.length){
     const cnt = {}; gf.forEach(g => cnt[g.kind] = (cnt[g.kind] || 0) + 1);
     kind = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
@@ -377,7 +409,7 @@ function renderNormal(){
   h += '<div class="verdict">안경: <span class="' + lvl + '">' + (KIND_KO[kind] || esc(kind)) + '</span>';
   if (sus.length) h += ' <span class="tag ' + lvl + '">' + Math.round(score * 100) + '% · ' + sus.length + '/' + gf.length + '프레임</span>';
   h += '</div>';
-  if (note) h += '<p class="note" style="margin:2px 0 0">' + note + '</p>';
+  if (note) h += '<p class="note" style="margin:4px 0 0">' + note + '</p>';
   if (sus.length){
     const withLens = sus.filter(g => g.lens).sort((a, b) => b.conf - a.conf)[0];
     if (withLens && withLens.bbox){
@@ -385,7 +417,7 @@ function renderNormal(){
       const side = Math.abs(lc - gc) < withLens.bbox.w * 0.12 ? '가운데(코받침 부근)' : (lc < gc ? '화면 왼쪽' : '화면 오른쪽');
       h += '<p style="margin:4px 0 0">📍 렌즈로 보이는 위치: <b>안경 앞 ' + side + '</b> <span class="note">(프레임 ' + (withLens.i + 1) + ' · 확대 분석)</span></p>';
     }
-    if (!withLens) h +='<p class="note" style="margin:4px 0 0">렌즈 위치는 특정하지 못했습니다.</p>';
+    if (!withLens) h +='<p class="note" style="margin:4px 0 0">거리·해상도 영향으로 정확한 렌즈 점 위치는 특정하지 못했습니다.</p>';
   }
   h += '<div class="verdict" style="margin-top:10px">초소형 카메라 후보: <span class="' + (camHit.length ? levelOf(conf01(camHit[0].res.confidence)) : 'lo') + '">' +
        (camHit.length ? camHit.length + '건' : '발견 안 됨') + '</span></div>';
@@ -412,7 +444,7 @@ function renderNormal(){
     const ctx = c.getContext('2d'); ctx.drawImage(j.crop, 0, 0);
     const res = j.res && !j.res.error ? j.res : null;
     if (res && validBox(res.lens_bbox)) drawBox(ctx, c, validBox(res.lens_bbox), '#ff3b30', '');
-    let t = '<b>프레임 ' + (j.frame + 1) + ' · ' + (j.kind === 'glasses' ? '안경' : esc(j.label)) + '</b><br>';
+    let t = '<b>프레임 ' + (j.frame + 1) + ' · ' + esc(j.label) + '</b><br>';
     if (!res) t += '<span class="note">' + esc(j.res ? j.res.error : '결과 없음') + '</span>';
     else if (j.kind === 'glasses') t += (KIND_KO[res.kind] || esc(res.kind)) + ' ' + Math.round(conf01(res.confidence) * 100) + '%<br><span class="note">' + esc(res.evidence || '') + '</span>';
     else t += (IS_CAM_KO[res.is_camera] || '') + ' ' + Math.round(conf01(res.confidence) * 100) + '% · ' + esc(res.object || '') + '<br><span class="note">' + esc(res.evidence || '') + '</span>';
