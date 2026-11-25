@@ -25,7 +25,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-MODEL = os.environ.get("LENSGUARD_MODEL", "gemini-3.8-flash")
+MODEL = os.environ.get("LENSGUARD_MODEL", "gemini-2.5-flash")
 MAX_FRAMES = 12
 MAX_FRAME_BYTES = 1_500_000
 MAX_CROPS = 16
@@ -36,21 +36,21 @@ app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
 SYSTEM_PROMPT = """You are a privacy-protection visual inspection assistant. Examine a single video frame \
 to detect smart / AI glasses (e.g., Ray-Ban Meta, Oakley Meta, Solos, Even Realities, Xiaomi, Huawei, \
-or any camera/sensor-equipped eyewear) and hidden cameras.
+or any camera/sensor-equipped eyewear) and hidden cameras, even from a distance or in medium/low resolution.
 
-How to spot Smart / AI glasses (even in low resolution or partial angles):
-- Front frame corners (near the temples/hinges) or nose bridge having ANY small dark circular lens, \
-symmetrical/asymmetrical sensor dots, tiny LED indicator, or slightly wider/bulkier upper-outer corners \
-(like Wayfarer-style thick frames with corner dots).
-- Noticeably thick, flat, or boxy temple arms (housing batteries/speakers/electronics) compared to thin metal or classic wire frames.
-- Electronic seam lines, touch bars, speaker grilles, or glossy sensor windows along the temples.
+How to spot Smart / AI glasses from afar or in casual footage:
+- Thick, chunky, or bold plastic/acetate front frames or wide upper-outer corners near the hinges.
+- Thick, flat, solid, or boxy temple arms (housing batteries, speakers, touch controls, or processors) \
+instead of thin/delicate arms.
+- Any small dark circular lens, symmetrical/asymmetrical dot, tiny LED, or glossy sensor spot near the \
+left/right front corners, temples, or nose bridge.
 
-Important sensitivity rule:
-- Real smart glasses look very similar to ordinary thick-rimmed glasses or sunglasses at a glance.
-- Do NOT default to "regular" or "sunglasses" just because a lens is small or blurry.
-- If the glasses have thick frames/temples OR any suspicious dot/lens/reflection at the frame corners or bridge, \
-classify as "smart_glasses_suspected" (confidence 0.45-0.75) so it gets flagged for closer inspection.
-- Only use "regular" or "sunglasses" when the frame and temples are clearly thin/plain with zero corner dots or bulky electronics.
+High-recall / anti-miss rule (prioritize catching potential smart glasses over avoiding false alarms):
+- Do NOT default to "regular" or "sunglasses" when viewing from a distance, at an angle, or in compressed video.
+- If a person wears glasses with thick/chunky frames or thick/solid temples, OR if any corner/hinge/bridge \
+detail is unclear or potentially suspicious, classify as "smart_glasses_suspected" (confidence 0.5-0.8).
+- If clear camera/sensor/LED/module traits are visible, classify as "smart_glasses_likely" (confidence 0.75-0.95).
+- Reserve "regular" or "sunglasses" ONLY for clearly thin wire/rimless/minimal frames with clearly thin plain temples.
 - Never identify who the person is. Coordinates are normalized 0-1 (x,y = top-left, w,h = size).
 
 Reply with ONLY a JSON object, no prose, in this schema:
@@ -94,7 +94,7 @@ def extract_json(text: str):
 
 REFINE_COMMON = """You are a visual inspection assistant that helps people protect their privacy by \
 spotting recording devices. You are given a CLOSE-UP CROP cut out of a larger video frame. \
-An earlier coarse pass flagged this region as possibly containing a camera.
+An earlier coarse pass flagged this region for closer inspection.
 
 Rules:
 - Never identify who the person is. Describe only equipment and objects.
@@ -105,16 +105,16 @@ Rules:
 REFINE_PROMPTS = {
     "glasses": REFINE_COMMON + """
 
-Task: inspect the cropped eyewear closely for Smart / AI glasses traits.
-Smart / AI glasses often resemble Wayfarer or sporty sunglasses, so look carefully for:
+Task: inspect the cropped eyewear closely for Smart / AI glasses traits, including distant/compressed clips.
+Look carefully for:
 1. Small round camera lens or sensor window on the upper-left/right front corner near the hinge, or near the nose bridge.
 2. Tiny LED dot (white/red/green or unlit dark pinhole) next to the corner lens.
-3. Unusually thick, slab-sided, or hollow-looking temple arms (housing batteries/speakers), touch-strip indentations, or hinge electronics.
-4. Any asymmetrical dot/circle on one side of the front frame (one side camera, other side LED/mic).
+3. Thick, wide, flat, slab-sided, or bulky temple arms (housing batteries/speakers/electronics), touch-strip areas, or hinge modules.
+4. Any asymmetrical dot/circle/mark on one side of the front frame or temple.
 
-Sensitivity rule:
-- Because crops can be slightly blurry, if you see thick electronic-looking temples OR any corner dot/lens/asymmetrical mark, \
-output "smart_glasses_suspected" or "smart_glasses_likely" rather than "regular"/"sunglasses".
+High-recall rule:
+- Even in blurry or distant crops, if the eyewear has thick/chunky frames or thick/bulky temples or any suspicious \
+corner/hinge/bridge mark, return "smart_glasses_suspected" or "smart_glasses_likely" rather than "regular"/"sunglasses".
 
 Schema:
 {"kind": "none|regular|sunglasses|smart_glasses_suspected|smart_glasses_likely",
@@ -261,7 +261,6 @@ def index():
 
 @app.get("/sw.js")
 def service_worker():
-    # 서비스 워커는 사이트 전체(/)를 제어해야 하므로 루트 경로로 제공한다.
     resp = send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
     resp.headers["Cache-Control"] = "no-cache"
     return resp
