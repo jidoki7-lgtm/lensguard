@@ -94,7 +94,7 @@ Reply with ONLY a JSON object, no prose, in this schema:
 
 
 def decode_image(data, limit=MAX_FRAME_BYTES):
-    """data URL 또는 base64 문자열을 검증한다. (b64, 오류메시지) 반환."""
+    """data URL, base64 문자열, 또는 {'image': ...} 딕셔너리를 검증한다. (b64, 오류메시지) 반환."""
     if isinstance(data, dict):
         data = data.get("image") or data.get("dataUrl") or data.get("data")
     if not isinstance(data, str) or not data.strip():
@@ -109,10 +109,11 @@ def decode_image(data, limit=MAX_FRAME_BYTES):
         raw = base64.b64decode(b64, validate=False)
     except Exception:
         return None, "잘못된 이미지 데이터"
+    if len(raw) < 32:
+        return None, "잘못된 이미지 데이터"
     if len(raw) > limit:
         return None, f"이미지가 너무 큽니다 ({limit // 1_000_000:.1f}MB 초과)"
-    return b64, Nonedef
-       
+    return b64, None
 
 
 def extract_json(text: str):
@@ -292,4 +293,196 @@ def call_gemini(api_key: str, jpeg_b64: str, system: str, prompt: str, max_token
         method="POST",
     )
     data = _post_json(req)
-    cands = data.get("candidates") or
+    cands = data.get("candidates") or []
+    if not cands:
+        reason = (data.get("promptFeedback") or {}).get("blockReason", "no_candidates")
+        raise ValueError(f"blocked:{reason}")
+    parts = (cands[0].get("content") or {}).get("parts") or []
+    text = "".join(p.get("text", "") for p in parts if isinstance(p, dict) and not p.get("thought"))
+    if not text.strip():
+        raise ValueError("empty_response")
+    return extract_json(text)
+
+
+def call_claude(api_key: str, jpeg_b64: str, system: str = SYSTEM_PROMPT,
+                prompt: str = "Analyze this frame. JSON only.", max_tokens: int = 900) -> dict:
+    body = {
+        "model": CLAUDE_MODEL,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/jpeg", "data": jpeg_b64},
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ],
+    }
+    req = urllib.request.Request(
+        API_URL,
+        data=json.dumps(body).encode(),
+        headers={
+            "content-type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+    data = _post_json(req)
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    return extract_json(text)
+
+
+def mock_result(i: int) -> dict:
+    rnd = random.Random(i)
+    suspicious = rnd.random() > 0.4
+    return {
+        "person_visible": True,
+        "glasses": {
+            "worn": True,
+            "kind": "smart_glasses_suspected" if suspicious else "regular",
+            "confidence": round(rnd.uniform(0.45, 0.8), 2) if suspicious else 0.8,
+            "bbox": {"x": 0.38, "y": 0.18, "w": 0.24, "h": 0.1},
+            "evidence": "MOCK: 데모 데이터입니다 (API 키 없음).",
+        },
+        "camera_candidates": (
+            [
+                {
+                    "where": "MOCK: 가슴 단추",
+                    "kind": "pinhole",
+                    "confidence": 0.4,
+                    "bbox": {"x": 0.47, "y": 0.52, "w": 0.06, "h": 0.06},
+                    "evidence": "MOCK 데모",
+                }
+            ]
+            if suspicious
+            else []
+        ),
+        "image_quality": "fair",
+        "notes": "MOCK 모드",
+    }
+
+
+def mock_refine(kind: str, i: int) -> dict:
+    rnd = random.Random(1000 + i)
+    c = round(rnd.uniform(0.35, 0.8), 2)
+    box = {"x": 0.35, "y": 0.35, "w": 0.3, "h": 0.3}
+    if kind == "glasses":
+        return {"kind": "smart_glasses_suspected", "confidence": c, "lens_found": True,
+                "lens_bbox": box, "features_seen": ["MOCK: 모서리 렌즈"], "features_missing": [],
+                "evidence": "MOCK: 데모 데이터입니다 (API 키 없음)."}
+    if kind == "glint":
+        return {"source": "camera_lens" if c > 0.6 else "metal_hardware",
+                "is_camera": "possible" if c > 0.6 else "unlikely", "confidence": c,
+                "object": "MOCK 물체", "lens_bbox": box, "evidence": "MOCK: 데모 데이터입니다."}
+    return {"is_camera": "possible" if c > 0.6 else "unlikely", "confidence": c, "kind": "pinhole",
+            "object": "MOCK 단추", "lens_bbox": box, "evidence": "MOCK: 데모 데이터입니다."}
+
+
+def err_msg(e: Exception) -> str:
+    """사용자에게 보여줄 짧은 오류 문구 (키·내부 정보는 담지 않는다)."""
+    if isinstance(e, urllib.error.HTTPError):
+        hint = {400: "요청/키 확인", 401: "API 키가 올바르지 않음", 403: "API 키 권한 없음",
+                404: "모델 이름 확인", 429: "사용 한도 초과, 잠시 후 다시"}.get(e.code, "")
+        return f"API 오류 {e.code}" + (f" ({hint})" if hint else "")
+    if isinstance(e, ValueError) and str(e).startswith("blocked:"):
+        return "AI가 이 이미지를 처리하지 않았습니다 (안전 필터)"
+    return f"분석 실패: {type(e).__name__}"
+
+
+def run_parallel(items, fn, workers=None):
+    """items 순서를 유지하며 병렬로 fn(i, item)을 실행한다."""
+    if workers is None:
+        workers = 2 if get_provider() == "gemini" else 4
+    out = [None] * len(items)
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = {ex.submit(fn, i, it): i for i, it in enumerate(items)}
+        for fut in futs:
+            out[futs[fut]] = fut.result()
+    return out
+
+
+@app.get("/")
+def index():
+    return send_from_directory(app.static_folder, "index.html")
+
+
+@app.get("/sw.js")
+def service_worker():
+    resp = send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+@app.get("/api/status")
+def status():
+    p = get_provider()
+    return jsonify({"mock": p == "mock", "provider": p, "model": current_model(p)})
+
+
+@app.post("/api/analyze")
+def analyze():
+    payload = request.get_json(silent=True) or {}
+    frames = payload.get("frames")
+    if not isinstance(frames, list) or not frames:
+        return jsonify({"error": "frames 배열이 필요합니다."}), 400
+    if len(frames) > MAX_FRAMES:
+        return jsonify({"error": f"한 번에 최대 {MAX_FRAMES}프레임까지 가능합니다."}), 400
+
+    provider = get_provider()
+
+    def work(i, f):
+        b64, err = decode_image(f)
+        if err:
+            return {"index": i, "error": err}
+        try:
+            r = call_model(provider, b64) if provider != "mock" else mock_result(i)
+            r["index"] = i
+            return r
+        except Exception as e:  # noqa: BLE001
+            return {"index": i, "error": err_msg(e)}
+
+    return jsonify({"mock": provider == "mock", "results": run_parallel(frames, work)})
+
+
+@app.post("/api/refine")
+def refine():
+    """잘라낸 영역(crop)을 종류별 정밀 프롬프트로 다시 분석한다."""
+    payload = request.get_json(silent=True) or {}
+    crops = payload.get("crops")
+    if not isinstance(crops, list) or not crops:
+        return jsonify({"error": "crops 배열이 필요합니다."}), 400
+    if len(crops) > MAX_CROPS:
+        return jsonify({"error": f"한 번에 최대 {MAX_CROPS}개 영역까지 가능합니다."}), 400
+
+    provider = get_provider()
+
+    def work(i, c):
+        kind = (c.get("kind") if isinstance(c, dict) else None) or "glasses"
+        if kind not in REFINE_PROMPTS:
+            kind = "glasses"
+        b64, err = decode_image(c, MAX_CROP_BYTES)
+        if err:
+            return {"index": i, "error": err}
+        try:
+            if provider != "mock":
+                r = call_model(provider, b64, system=REFINE_PROMPTS[kind],
+                               prompt="Analyze this close-up crop. JSON only.", max_tokens=600)
+            else:
+                r = mock_refine(kind, i)
+            r["index"] = i
+            r["kind_requested"] = kind
+            return r
+        except Exception as e:  # noqa: BLE001
+            return {"index": i, "error": err_msg(e)}
+
+    return jsonify({"mock": provider == "mock", "results": run_parallel(crops, work)})
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
