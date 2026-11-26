@@ -1,714 +1,648 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LensGuard</title>
-<link rel="manifest" href="/static/manifest.webmanifest">
-<meta name="theme-color" content="#2457d6">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="LensGuard">
-<link rel="icon" href="/static/icons/icon-192.png">
-<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LensGuard — 스마트(AI) 안경 · 초소형 카메라 탐지</title>
 <style>
-  :root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--sub:#60666f;--line:#e3e6ea;--accent:#2457d6;--warn:#d4541c;--ok:#1f8a4c;--mid:#b7830f}
-  @media (prefers-color-scheme:dark){:root{--bg:#101215;--card:#181b20;--ink:#eceef1;--sub:#9aa1ab;--line:#2a2f36;--accent:#6b93ff;--warn:#ff8a5c;--ok:#4cc783;--mid:#e0b33f}}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif}
-  main{max-width:760px;margin:0 auto;padding:20px 16px 60px}
-  h1{font-size:22px;margin:8px 0 2px}
-  .sub{color:var(--sub);margin:0 0 14px;font-size:14px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
-  .row{display:flex;gap:10px;flex-wrap:wrap}
-  label.btn,button{appearance:none;border:0;border-radius:10px;padding:12px 16px;font:inherit;font-weight:600;cursor:pointer;background:var(--accent);color:#fff;text-align:center}
-  label.btn.alt,button.alt{background:transparent;color:var(--accent);border:1px solid var(--accent)}
-  button:disabled{opacity:.5;cursor:default}
-  input[type=file]{display:none}
-  video{width:100%;max-height:300px;background:#000;border-radius:10px}
-  .tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:14px}
-  .tabs button{flex:1;background:transparent;color:var(--sub);padding:10px 8px}
-  .tabs button.on{background:var(--accent);color:#fff}
-  .verdict{font-size:18px;font-weight:700}
-  .tag{display:inline-block;padding:2px 9px;border-radius:99px;font-size:13px;font-weight:600;border:1px solid currentColor}
-  .hi{color:var(--warn)}.md{color:var(--mid)}.lo{color:var(--ok)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
-  .frame{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#000;cursor:pointer}
-  .frame canvas{display:block;width:100%;height:auto}
-  .frame .n{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.65);color:#fff;border-radius:6px;font-size:12px;padding:1px 6px}
-  .zc{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card);cursor:pointer}
-  .zc canvas{display:block;width:100%;height:auto;background:#000}
-  .zc .t{padding:8px 10px;font-size:13px;line-height:1.45}
-  ul{margin:8px 0 0;padding-left:20px}
-  li{margin:4px 0}
-  .note{font-size:13px;color:var(--sub)}
-  .bar{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:10px}
-  .bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
-  .live{position:relative}
-  .live canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-  .steps{margin:6px 0 0;padding-left:20px;font-size:14px}
-  dialog{border:0;border-radius:14px;padding:0;max-width:92vw;background:var(--card);color:var(--ink)}
-  dialog::backdrop{background:rgba(0,0,0,.6)}
-  dialog canvas{max-width:90vw;max-height:80vh;display:block}
-  dialog .cap{padding:10px 14px;font-size:14px}
+  :root {
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --ink: #111827;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --brand: #1d4ed8;
+    --brand-soft: #eff6ff;
+    --ok: #047857;
+    --ok-bg: #ecfdf5;
+    --warn: #b45309;
+    --warn-bg: #fffbeb;
+    --bad: #b91c1c;
+    --bad-bg: #fef2f2;
+    --r: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 18px 14px 48px; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 14px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tab {
+    flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--ink); font-weight: 600; font-size: 0.92rem; cursor: pointer;
+  }
+  .tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+  .model-bar { font-size: 0.85rem; color: var(--muted); margin: 2px 0 12px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button.action {
+    padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); font-weight: 600; font-size: 0.95rem; cursor: pointer;
+  }
+  button.action.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+  button.action:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-full { width: 100%; margin-top: 12px; }
+
+  .hint { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
+  video.preview {
+    width: 100%; max-height: 280px; border-radius: 10px; background: #000;
+    margin-top: 12px; display: none;
+  }
+  video.preview.show { display: block; }
+
+  .prog-wrap { margin-top: 12px; display: none; }
+  .prog-wrap.show { display: block; }
+  .prog-track { height: 8px; background: #e5e7eb; border-radius: 999px; overflow: hidden; }
+  .prog-fill { height: 100%; width: 0%; background: var(--brand); transition: width 0.25s ease; }
+  .prog-text { font-size: 0.84rem; color: var(--muted); margin-top: 6px; }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 0.82rem; font-weight: 700; margin-bottom: 6px;
+  }
+  .b-ok { background: var(--ok-bg); color: var(--ok); }
+  .b-warn { background: var(--warn-bg); color: var(--warn); }
+  .b-bad { background: var(--bad-bg); color: var(--bad); }
+
+  .sum-title { font-size: 1.15rem; font-weight: 700; margin: 4px 0 6px; }
+  .sum-desc { color: var(--muted); font-size: 0.92rem; margin: 0 0 10px; }
+  .err-box {
+    background: var(--bad-bg); color: var(--bad); border: 1px solid #fecaca;
+    border-radius: 10px; padding: 10px 12px; font-size: 0.86rem; margin-top: 8px;
+    white-space: pre-wrap; word-break: break-word;
+  }
+
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
+  .thumb-card {
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fafafa; cursor: pointer;
+  }
+  .thumb-card img { width: 100%; height: 130px; object-fit: cover; display: block; }
+  .thumb-meta { padding: 8px 10px; font-size: 0.8rem; }
+  .thumb-meta strong { display: block; margin-bottom: 2px; }
+
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: none;
+    align-items: center; justify-content: center; padding: 16px; z-index: 999;
+  }
+  .modal-bg.show { display: flex; }
+  .modal-box {
+    background: #fff; border-radius: 14px; max-width: 640px; width: 100%;
+    padding: 14px; max-height: 90vh; overflow: auto;
+  }
+  .modal-box img { width: 100%; border-radius: 8px; display: block; margin-bottom: 10px; }
+
+  .disc { font-size: 0.78rem; color: var(--muted); line-height: 1.55; margin-top: 18px; }
+  input[type="file"] { display: none; }
 </style>
 </head>
 <body>
-<main>
+<div class="wrap">
   <h1>LensGuard</h1>
   <p class="sub">스마트(AI) 안경과 초소형 카메라 의심 요소를 AI로 분석합니다.</p>
 
-  <div class="tabs" role="tablist">
-    <button id="tabN" class="on" role="tab">일반 분석</button>
-    <button id="tabF" role="tab">🔦 플래시 스캔</button>
+  <div class="tabs">
+    <button type="button" class="tab active" id="tabNormal" onclick="setMode('normal')">일반 분석</button>
+    <button type="button" class="tab" id="tabFlash" onclick="setMode('flash')">🔦 플래시 스캔</button>
   </div>
-  <p id="mode" class="note" style="margin:-6px 0 12px"></p>
 
-  <!-- ===== 일반 분석 ===== -->
-  <section id="paneN">
-    <div class="card">
-      <div class="row">
-        <label class="btn">📹 영상 촬영<input id="rec" type="file" accept="video/*" capture="environment"></label>
-        <label class="btn alt">📁 영상 선택<input id="pick" type="file" accept="video/*"></label>
-      </div>
-      <p class="note" style="margin:10px 0 0">5~10초, 얼굴과 안경을 화면에 크게, 밝은 곳에서 천천히 좌우로 돌려가며 촬영하면 정확도가 올라갑니다. 1차로 전체를 보고, 의심 부위는 확대해서 한 번 더 분석합니다.</p>
-      <video id="vid" controls playsinline hidden></video>
-      <div class="row" style="margin-top:12px">
-        <button id="go" disabled>분석 시작</button>
-      </div>
-      <div class="bar" hidden id="barw"><i id="bar"></i></div>
-      <p id="msg" class="note"></p>
-    </div>
-    <div id="out" hidden>
-      <div class="card" id="sum"></div>
-      <div class="card"><b>🔍 확대 재분석</b> <span class="note">(의심 부위를 잘라 다시 본 결과 · 탭하면 크게 보기)</span><div class="grid" id="zgrid"></div></div>
-      <div class="card"><b>프레임별 결과</b> <span class="note">(탭하면 크게 보기)</span><div class="grid" id="grid"></div></div>
-    </div>
-  </section>
+  <div class="model-bar" id="modelBar">모델: 확인 중...</div>
 
-  <!-- ===== 플래시 스캔 ===== -->
-  <section id="paneF" hidden>
-    <div class="card">
-      <b>렌즈 반사광 스캔</b>
-      <p class="note" style="margin:4px 0 0">카메라 렌즈는 빛을 정면으로 되받아 작고 날카롭게 반짝입니다. 어두운 곳에서 플래시를 켜고 훑으면 숨은 렌즈가 순간적으로 번쩍이는 점으로 보일 수 있어요.</p>
-      <ol class="steps">
-        <li>실내 조명을 최대한 어둡게 합니다.</li>
-        <li>플래시를 켜고, 확인할 사람·물건에서 1~2m 떨어져 겨냥합니다.</li>
-        <li>스캔을 시작하고 12초 동안 폰을 천천히 위아래·좌우로 훑습니다.</li>
-      </ol>
-      <div class="row" style="margin-top:12px">
-        <button id="camStart">📷 카메라 켜기</button>
-        <button id="torchBtn" class="alt" hidden>🔦 플래시 켜짐</button>
-        <label class="btn alt">📁 플래시로 찍은 영상 선택<input id="flashFile" type="file" accept="video/*"></label>
-      </div>
-      <p class="note" style="margin:8px 0 0">아이폰 Safari 등 앱에서 플래시를 켤 수 없는 기기는 기본 카메라 앱의 동영상에서 손전등을 켜고 찍은 뒤 위 버튼으로 선택하세요.</p>
-      <div class="live" id="liveBox" hidden style="margin-top:12px">
-        <video id="liveVid" playsinline muted></video>
-        <canvas id="liveOv"></canvas>
-      </div>
-      <div class="row" id="scanRow" hidden style="margin-top:12px">
-        <button id="scanBtn">스캔 시작 (12초)</button>
-        <button id="camStop" class="alt">카메라 끄기</button>
-      </div>
-      <div class="bar" hidden id="fbarw"><i id="fbar"></i></div>
-      <p id="fmsg" class="note"></p>
+  <div class="card">
+    <div class="btn-row">
+      <button type="button" class="action" id="btnRecord" onclick="triggerRecord()">🎥 영상 촬영</button>
+      <button type="button" class="action" id="btnPick" onclick="triggerPick()">📁 영상 선택</button>
     </div>
-    <div id="fout" hidden>
-      <div class="card" id="fsum"></div>
-      <div class="card"><b>반사점 확대 분석</b> <span class="note">(탭하면 크게 보기)</span><div class="grid" id="fgrid"></div></div>
-    </div>
-  </section>
 
-  <p class="note">※ 이 결과는 AI와 이미지 처리에 의한 추정이며 오탐·미탐이 있습니다. "발견 안 됨"이 안전하다는 뜻이 아닙니다. 영상은 분석 목적으로만 쓰이고 서버에 저장되지 않으며, 사람의 신원은 식별하지 않습니다. 타인을 촬영할 때는 해당 지역의 법과 상대방의 사생활을 존중해 주세요.</p>
-  <dialog id="dlg"><canvas id="big"></canvas><div class="cap" id="cap"></div></dialog>
-</main>
+    <input type="file" id="fileRecord" accept="video/*" capture="environment">
+    <input type="file" id="filePick" accept="video/*">
+
+    <video id="videoPreview" class="preview" controls playsinline></video>
+
+    <p class="hint" id="modeHint">
+      5~10초, 얼굴과 안경을 화면에 크게, 밝은 곳에서 천천히 좌우로 돌려가며 촬영하면 정확도가 올라갑니다. 1차로 전체를 보고, 의심 부위는 확대해서 한 번 더 분석합니다.
+    </p>
+
+    <button type="button" class="action primary btn-full" id="btnAnalyze" onclick="startAnalysis()" disabled>분석 시작</button>
+
+    <div class="prog-wrap" id="progWrap">
+      <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+      <div class="prog-text" id="progText">준비 중...</div>
+    </div>
+  </div>
+
+  <div id="resultArea" style="display:none;">
+    <div class="card" id="summaryCard"></div>
+    <div class="card" id="refineCard">
+      <strong>🔍 확대 재분석</strong> <span class="hint">(의심 부위를 잘라 다시 본 결과 · 탭하면 크게 보기)</span>
+      <div id="refineBody" class="grid-2"></div>
+    </div>
+    <div class="card" id="framesCard">
+      <strong>프레임별 결과</strong>
+      <div id="framesBody" class="grid-2"></div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="modalBg" onclick="closeModal(event)">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <img id="modalImg" src="" alt="확대 이미지">
+      <div id="modalCaption" class="hint" style="margin-top:0;"></div>
+      <button type="button" class="action btn-full" onclick="closeModal()">닫기</button>
+    </div>
+  </div>
+
+  <p class="disc">
+    ※ 이 결과는 AI와 이미지 처리에 의한 추정이며 오탐·미탐이 있습니다. "발견 안 됨"이 안전하다는 뜻이 아닙니다. 영상은 분석 목적으로만 쓰이고 서버에 저장되지 않으며, 사람의 신원은 식별하지 않습니다. 타인을 촬영할 때는 해당 지역의 법과 상대방의 사생활을 존중해 주세요.
+  </p>
+</div>
 
 <script>
-const $ = id => document.getElementById(id);
-const CFG = { N_FRAMES: 8, STAGE1_W: 1024, HI_W: 1920, MAX_GLASSES_JOBS: 5, MAX_CAM_JOBS: 7,
-              CROP_OUT: 768, GLINT_TOP: 8, SCAN_SEC: 12 };
-
-// PWA: 서비스 워커 등록 (HTTPS 또는 localhost에서만 동작)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
-}
-
-/* ============================ 공통 유틸 ============================ */
-const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const num = (v, d = 0) => { v = Number(v); return Number.isFinite(v) ? v : d; };
-const conf01 = (v, d = 0) => clamp(num(v, d), 0, 1);
-const levelOf = c => c >= .7 ? 'hi' : c >= .4 ? 'md' : 'lo';
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-function validBox(b){
-  if (!b || typeof b !== 'object') return null;
-  let x = num(b.x, NaN), y = num(b.y, NaN), w = num(b.w, NaN), h = num(b.h, NaN);
-  if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return null;
-  x = clamp(x, 0, 1); y = clamp(y, 0, 1);
-  w = Math.min(w, 1 - x); h = Math.min(h, 1 - y);
-  return (w > 0.002 && h > 0.002) ? {x, y, w, h} : null;
-}
-// 잘라낸 영역(rect) 안의 상대 좌표 box를 원본 프레임 기준 좌표로 되돌린다.
-const mapBox = (b, rect) => ({ x: rect.x + b.x * rect.w, y: rect.y + b.y * rect.h, w: b.w * rect.w, h: b.h * rect.h });
-
-function scaleToWidth(src, maxW){
-  const sw = src.videoWidth || src.width, sh = src.videoHeight || src.height;
-  const sc = Math.min(1, maxW / sw);
-  const c = document.createElement('canvas');
-  c.width = Math.round(sw * sc); c.height = Math.round(sh * sc);
-  c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
-  return c;
-}
-
-/**
- * 정규화 박스(box) 주변을 잘라낸다.
- * pad: 박스 크기 대비 여백 비율, minPx: 원본 픽셀 기준 최소 한 변, square: 정사각형으로.
- * 반환: { canvas, rect(원본 대비 정규화 좌표) }
- */
-function cropNorm(src, box, { pad = 0.3, minPx = 0, maxOut = CFG.CROP_OUT, square = false, maxUp = 1.5 } = {}){
-  const W = src.width, H = src.height;
-  const cx = (box.x + box.w / 2) * W, cy = (box.y + box.h / 2) * H;
-  let w = box.w * W * (1 + 2 * pad), h = box.h * H * (1 + 2 * pad);
-  w = Math.max(w, minPx); h = Math.max(h, minPx);
-  if (square){ w = h = Math.max(w, h); }
-  w = Math.min(w, W); h = Math.min(h, H);
-  const x0 = clamp(cx - w / 2, 0, W - w), y0 = clamp(cy - h / 2, 0, H - h);
-  const sc = Math.min(maxOut / Math.max(w, h), maxUp);
-  const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.round(w * sc)); c.height = Math.max(1, Math.round(h * sc));
-  c.getContext('2d').drawImage(src, x0, y0, w, h, 0, 0, c.width, c.height);
-  return { canvas: c, rect: { x: x0 / W, y: y0 / H, w: w / W, h: h / H } };
-}
-
-async function postJSON(url, body){
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  let j = {};
-  try { j = await r.json(); } catch (e) {}
-  if (!r.ok) throw new Error(j.error || ('서버 오류 ' + r.status));
-  return j;
-}
-
-function drawBox(ctx, c, b, color, label){
-  if (!b) return;
-  const x = b.x * c.width, y = b.y * c.height, w = b.w * c.width, h = b.h * c.height;
-  ctx.lineWidth = Math.max(2, c.width / 250); ctx.strokeStyle = color; ctx.strokeRect(x, y, w, h);
-  if (label){ ctx.font = Math.round(c.width / 38) + 'px sans-serif'; ctx.fillStyle = color; ctx.fillText(label, x, Math.max(14, y - 5)); }
-}
-function zoom(c, text){
-  const big = $('big'); big.width = c.width; big.height = c.height; big.getContext('2d').drawImage(c, 0, 0);
-  $('cap').textContent = text || '';
-  $('dlg').showModal();
-}
-$('dlg').onclick = () => $('dlg').close();
-
-fetch('/api/status').then(r => r.json()).then(s => {
-  $('mode').textContent = s.mock ? '⚠ 데모(MOCK) 모드: API 키가 없어 가짜 결과가 표시됩니다' : '모델: ' + s.model;
-}).catch(() => {});
-
-/* 탭 */
-function setTab(n){
-  $('paneN').hidden = !n; $('paneF').hidden = n;
-  $('tabN').classList.toggle('on', n); $('tabF').classList.toggle('on', !n);
-  if (n) stopCam();
-}
-$('tabN').onclick = () => setTab(true);
-$('tabF').onclick = () => setTab(false);
-
-/* ============================ 일반 분석 (1차 → 확대 재분석) ============================ */
-const KIND_KO = { none:'안경 없음', regular:'일반 안경', sunglasses:'선글라스',
-  smart_glasses_suspected:'스마트 안경 의심', smart_glasses_likely:'스마트 안경 가능성 높음' };
-const CAM_KO = { pinhole:'핀홀 렌즈', lens:'렌즈', led:'LED/표시등', unknown:'불명' };
-const IS_CAM_KO = { no:'카메라 아님', unlikely:'가능성 낮음', possible:'가능성 있음', likely:'가능성 높음' };
-const isSmart = k => typeof k === 'string' && k.startsWith('smart');
-
-let file = null;
-const S = { frames: [], results: [], jobs: [], mock: false };
-
-function onFile(e){
-  file = e.target.files[0]; if (!file) return;
-  const v = $('vid'); v.src = URL.createObjectURL(file); v.hidden = false;
-  $('go').disabled = false; $('out').hidden = true; $('msg').textContent = '';
-}
-$('rec').onchange = onFile; $('pick').onchange = onFile;
-
-const seek = (v, t) => new Promise(res => { v.onseeked = () => res(); v.currentTime = t; });
-
-async function loadVideo(f){
-  const v = document.createElement('video');
-  v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(f);
-  await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('영상을 읽을 수 없습니다')); });
-  return v;
-}
-
-async function extractFrames(f, n, onProgress){
-  const v = await loadVideo(f);
-  const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 5;
-  const out = [];
-  for (let i = 0; i < n; i++){
-    await seek(v, clamp((dur * (i + 0.5)) / n, 0, Math.max(0, dur - 0.05)));
-    const hi = scaleToWidth(v, CFG.HI_W);                 // 확대용 고해상도 원본
-    const lo = scaleToWidth(hi, CFG.STAGE1_W);            // 1차 분석용 축소본
-    out.push({ hi, dataUrl: lo.toDataURL('image/jpeg', 0.82) });
-    onProgress && onProgress((i + 1) / n);
-  }
-  return out;
-}
-
-/* 얼굴 박스에서 안경이 있을 자리(이마 아래~코끝 위)를 잘라낸다. */
-function eyeRegion(fb){
-  const x = clamp(fb.x - 0.08 * fb.w, 0, 1), y = clamp(fb.y + 0.15 * fb.h, 0, 1);
-  return { x, y, w: Math.min(fb.w * 1.16, 1 - x), h: Math.min(fb.h * 0.5, 1 - y) };
-}
-
-/* 1차 결과에서 확대해서 다시 볼 영역을 고른다. */
-function buildJobs(frames, results){
-  const gl = [], cam = [];
-  results.forEach((r, i) => {
-    if (!r || r.error) return;
-    const g = r.glasses, gb = g && g.worn ? validBox(g.bbox) : null;
-    if (gb){
-      const prio = (isSmart(g.kind) ? 2 : 0.5) + conf01(g.confidence) * 0.5;
-      gl.push({ frame: i, kind: 'glasses', box: gb, prio, label: '안경' });
-    } else {
-      // 1차에서 안경을 못 찾았어도, 얼굴 위치만 알면 눈 주변을 확대해서 다시 확인한다.
-      const fb = r.face && r.face.visible ? validBox(r.face.bbox) : null;
-      if (fb) gl.push({ frame: i, kind: 'glasses', box: eyeRegion(fb), prio: 0.2 + fb.w * fb.h, label: '눈 주변', auto: true });
-    }
-    (r.camera_candidates || []).forEach(c => {
-      const b = validBox(c.bbox);
-      if (b && conf01(c.confidence) >= 0.25)
-        cam.push({ frame: i, kind: 'camera', box: b, prio: 1 + conf01(c.confidence), label: c.where || '카메라 후보' });
-    });
-  });
-  const top = (a, k) => a.sort((x, y) => y.prio - x.prio).slice(0, k);
-  const jobs = [...top(gl, CFG.MAX_GLASSES_JOBS), ...top(cam, CFG.MAX_CAM_JOBS)];
-  jobs.forEach(j => {
-    const src = frames[j.frame].hi;
-    const c = j.kind === 'glasses'
-      ? cropNorm(src, j.box, { pad: 0.35, minPx: 256 })
-      : cropNorm(src, j.box, { pad: 0.5, minPx: Math.round(src.width * 0.12), square: true });
-    j.crop = c.canvas; j.rect = c.rect;
-  });
-  return jobs;
-}
-
-async function analyzeNormal(frames, setStatus){
-  setStatus('1차 분석 중… (프레임 ' + frames.length + '장)', 0.45);
-  const a = await postJSON('/api/analyze', { frames: frames.map(f => f.dataUrl) });
-  const results = a.results;
-  const jobs = buildJobs(frames, results);
-  let mock = a.mock;
-  if (jobs.length){
-    setStatus('의심 부위 확대 재분석 중… (' + jobs.length + '곳)', 0.7);
-    const r = await postJSON('/api/refine', {
-      crops: jobs.map(j => ({ image: j.crop.toDataURL('image/jpeg', 0.9), kind: j.kind })) });
-    r.results.forEach((res, k) => { jobs[k].res = res; });
-    mock = mock || r.mock;
-  }
-  return { frames, results, jobs, mock };
-}
-
-$('go').onclick = async () => {
-  const setStatus = (t, p) => { $('msg').textContent = t; $('bar').style.width = (p * 100) + '%'; };
-  $('go').disabled = true; $('barw').hidden = false; setStatus('프레임 추출 중…', 0);
-  try {
-    const frames = await extractFrames(file, CFG.N_FRAMES, p => setStatus('프레임 추출 중…', p * 0.4));
-    Object.assign(S, await analyzeNormal(frames, setStatus));
-    setStatus('', 1);
-    renderNormal();
-  } catch (err){
-    $('msg').textContent = '오류: ' + err.message;
-  } finally {
-    $('go').disabled = false; setTimeout(() => $('barw').hidden = true, 500);
-  }
+const CFG = {
+  N_FRAMES: 3,
+  STAGE1_W: 960,
+  HI_W: 1600,
+  MAX_GLASSES_JOBS: 3,
+  MAX_CAM_JOBS: 2,
+  CROP_OUT: 768,
+  GLINT_TOP: 6,
+  SCAN_SEC: 10
 };
 
-/* 프레임별 안경 판정 = 1차 결과 + (있으면) 확대 재분석 결과 */
-function glassesPerFrame(){
-  return S.frames.map((f, i) => {
-    const r = S.results[i];
-    if (!r || r.error) return null;
-    const g = r.glasses || {};
-    const worn1 = !!g.worn && (g.kind || 'regular') !== 'none';
-    const j = S.jobs.find(j => j.frame === i && j.kind === 'glasses' && j.res && !j.res.error);
-    if (!j && !worn1) return null;
-    const o = { i, kind: g.kind || 'regular', conf: conf01(g.confidence), refined: false, lens: null,
-                ev: g.evidence || '', bbox: validBox(g.bbox) };
-    if (j){
-      // 확대해서 본 결과가 더 정밀하므로 우선한다. 확대본에서 안경이 없다고 하면 이 프레임은 제외.
-      if ((j.res.kind || 'none') === 'none') return null;
-      o.refined = true;
-      o.kind = j.res.kind;
-      o.conf = conf01(j.res.confidence, o.conf);
-      o.ev = j.res.evidence || o.ev;
-      if (!o.bbox) o.bbox = j.box;
-      const lb = j.res.lens_found ? validBox(j.res.lens_bbox) : null;
-      if (lb) o.lens = mapBox(lb, j.rect);
-    }
-    return o;
-  }).filter(Boolean);
+let mode = "normal";
+let selectedFile = null;
+let hiVideoEl = null;
+
+function setMode(nextMode) {
+  mode = nextMode;
+  document.getElementById("tabNormal").classList.toggle("active", mode === "normal");
+  document.getElementById("tabFlash").classList.toggle("active", mode === "flash");
+  document.getElementById("modeHint").textContent = mode === "flash"
+    ? "어두운 환경에서 플래시를 비추며 렌즈·금속·센서 반사점을 훑듯 촬영해 주세요. 의심 반사 부위를 확대해 다시 확인합니다."
+    : "5~10초, 얼굴과 안경을 화면에 크게, 밝은 곳에서 천천히 좌우로 돌려가며 촬영하면 정확도가 올라갑니다. 1차로 전체를 보고, 의심 부위는 확대해서 한 번 더 분석합니다.";
 }
 
-function renderNormal(){
-  $('out').hidden = false;
-  const ok = S.results.filter(r => !r.error);
-  const gf = glassesPerFrame();
-  const sus = gf.filter(g => isSmart(g.kind) && g.conf >= 0.4);
-  let kind = 'none', score = 0, note = '';
-  if (sus.length){
-    const best = sus.reduce((a, b) => b.conf > a.conf ? b : a);
-    kind = best.kind; score = best.conf;
-    // 여러 프레임에서 반복될수록 신뢰 — 1프레임만 의심되면 점수를 낮춘다.
-    if (sus.length === 1 && gf.length >= 3){ score = Math.min(score, 0.55); note = '1개 프레임에서만 의심되어 신뢰도를 낮췄습니다.'; }
-  } else if (gf.length){
-    const cnt = {}; gf.forEach(g => cnt[g.kind] = (cnt[g.kind] || 0) + 1);
-    kind = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
-  }
-  const lvl = sus.length ? levelOf(score) : 'lo';
-  if (!gf.length){
-    const faces = S.results.filter(r => r && !r.error && r.face && r.face.visible).length;
-    note = faces
-      ? '안경이 보이지 않는다고 판단했습니다. (얼굴 감지 ' + faces + '/' + S.results.length + '프레임, 눈 주변 ' + S.jobs.filter(j => j.kind === 'glasses').length + '곳 확대 확인)'
-      : '얼굴을 찾지 못했습니다. 얼굴이 화면에 더 크고 밝게 나오도록 가까이서 다시 촬영해 보세요.';
-  }
-
-  const camHit = S.jobs.filter(j => j.kind === 'camera' && j.res && !j.res.error &&
-    ['possible', 'likely'].includes(j.res.is_camera) && conf01(j.res.confidence) >= 0.35)
-    .sort((a, b) => conf01(b.res.confidence) - conf01(a.res.confidence));
-  const camRejected = S.jobs.filter(j => j.kind === 'camera' && j.res && !j.res.error).length - camHit.length;
-
-  let h = '';
-  if (S.mock) h += '<p class="note">⚠ 데모 결과입니다. 실제 분석이 아닙니다.</p>';
-  h += '<div class="verdict">안경: <span class="' + lvl + '">' + (KIND_KO[kind] || esc(kind)) + '</span>';
-  if (sus.length) h += ' <span class="tag ' + lvl + '">' + Math.round(score * 100) + '% · ' + sus.length + '/' + gf.length + '프레임</span>';
-  h += '</div>';
-  if (note) h += '<p class="note" style="margin:2px 0 0">' + note + '</p>';
-  if (sus.length){
-    const withLens = sus.filter(g => g.lens).sort((a, b) => b.conf - a.conf)[0];
-    if (withLens && withLens.bbox){
-      const lc = withLens.lens.x + withLens.lens.w / 2, gc = withLens.bbox.x + withLens.bbox.w / 2;
-      const side = Math.abs(lc - gc) < withLens.bbox.w * 0.12 ? '가운데(코받침 부근)' : (lc < gc ? '화면 왼쪽' : '화면 오른쪽');
-      h += '<p style="margin:4px 0 0">📍 렌즈로 보이는 위치: <b>안경 앞 ' + side + '</b> <span class="note">(프레임 ' + (withLens.i + 1) + ' · 확대 분석)</span></p>';
-    }
-    if (!withLens) h +='<p class="note" style="margin:4px 0 0">렌즈 위치는 특정하지 못했습니다.</p>';
-  }
-  h += '<div class="verdict" style="margin-top:10px">초소형 카메라 후보: <span class="' + (camHit.length ? levelOf(conf01(camHit[0].res.confidence)) : 'lo') + '">' +
-       (camHit.length ? camHit.length + '건' : '발견 안 됨') + '</span></div>';
-  if (camHit.length){
-    h += '<ul>' + camHit.slice(0, 6).map(j => '<li><b>' + esc(j.label) + '</b> · ' + esc(j.res.object || '') + ' · ' +
-      (IS_CAM_KO[j.res.is_camera] || '') + ' ' + Math.round(conf01(j.res.confidence) * 100) + '% <span class="note">(프레임 ' + (j.frame + 1) + ') ' +
-      esc(j.res.evidence || '') + '</span></li>').join('') + '</ul>';
-  }
-  if (camRejected > 0) h += '<p class="note" style="margin:4px 0 0">1차에서 의심했던 ' + camRejected + '곳은 확대해 보니 카메라로 보이지 않았습니다.</p>';
-  const bad = S.results.length - ok.length;
-  if (bad) h += '<p class="note">' + bad + '개 프레임은 분석에 실패했습니다.</p>';
-  const poor = ok.filter(r => r.image_quality === 'poor').length;
-  if (poor) h += '<p class="note">화질이 낮은 프레임이 ' + poor + '장 있어 결과가 부정확할 수 있습니다.</p>';
-  const rf = S.jobs.filter(j => j.res && j.res.error).length;
-  if (rf) h += '<p class="note">확대 재분석 ' + rf + '건이 실패했습니다.</p>';
-  $('sum').innerHTML = h;
-
-  // 확대 재분석 카드
-  const z = $('zgrid'); z.innerHTML = '';
-  if (!S.jobs.length) z.innerHTML = '<p class="note">확대해서 볼 의심 부위가 없었습니다.</p>';
-  S.jobs.forEach(j => {
-    const c = document.createElement('canvas'); c.width = j.crop.width; c.height = j.crop.height;
-    const ctx = c.getContext('2d'); ctx.drawImage(j.crop, 0, 0);
-    const res = j.res && !j.res.error ? j.res : null;
-    if (res && validBox(res.lens_bbox)) drawBox(ctx, c, validBox(res.lens_bbox), '#ff3b30', '');
-    let t = '<b>프레임 ' + (j.frame + 1) + ' · ' + esc(j.label) + '</b><br>';
-    if (!res) t += '<span class="note">' + esc(j.res ? j.res.error : '결과 없음') + '</span>';
-    else if (j.kind === 'glasses') t += (KIND_KO[res.kind] || esc(res.kind)) + ' ' + Math.round(conf01(res.confidence) * 100) + '%<br><span class="note">' + esc(res.evidence || '') + '</span>';
-    else t += (IS_CAM_KO[res.is_camera] || '') + ' ' + Math.round(conf01(res.confidence) * 100) + '% · ' + esc(res.object || '') + '<br><span class="note">' + esc(res.evidence || '') + '</span>';
-    const d = document.createElement('div'); d.className = 'zc'; d.appendChild(c);
-    const tt = document.createElement('div'); tt.className = 't'; tt.innerHTML = t; d.appendChild(tt);
-    d.onclick = () => zoom(c, tt.textContent); z.appendChild(d);
-  });
-
-  // 프레임별 썸네일 (1차 박스 + 확대 분석에서 찾은 렌즈 위치)
-  const grid = $('grid'); grid.innerHTML = '';
-  const lensByFrame = {};
-  gf.forEach(g => { if (g.lens) lensByFrame[g.i] = g.lens; });
-  S.frames.forEach((f, i) => {
-    const r = S.results[i];
-    const src = f.hi; const sc = Math.min(1, 640 / src.width);
-    const c = document.createElement('canvas'); c.width = Math.round(src.width * sc); c.height = Math.round(src.height * sc);
-    const ctx = c.getContext('2d'); ctx.drawImage(src, 0, 0, c.width, c.height);
-    if (r && !r.error){
-      drawBox(ctx, c, r.glasses && validBox(r.glasses.bbox), '#ff8a5c', r.glasses && r.glasses.worn ? (KIND_KO[r.glasses.kind] || '') : '');
-      (r.camera_candidates || []).forEach(k => drawBox(ctx, c, validBox(k.bbox), '#ffd23f', k.where));
-      if (lensByFrame[i]) drawBox(ctx, c, lensByFrame[i], '#ff3b30', '렌즈?');
-    }
-    const d = document.createElement('div'); d.className = 'frame';
-    d.innerHTML = '<span class="n">' + (i + 1) + '</span>'; d.appendChild(c);
-    d.onclick = () => zoom(c, !r ? '' : r.error ? r.error : (r.notes || '') + (r.glasses && r.glasses.evidence ? ' — ' + r.glasses.evidence : ''));
-    grid.appendChild(d);
-  });
+function triggerRecord() {
+  document.getElementById("fileRecord").click();
 }
 
-/* ============================ 플래시 스캔 (렌즈 반사광) ============================ */
-
-/**
- * 플래시를 받아 되돌아오는 렌즈 반사처럼 "작고, 둥글고, 주변보다 훨씬 밝은 점"을 찾는다.
- * data: RGBA 배열, w/h: 크기. 반환: 점수 내림차순 blob 목록 (좌표는 0~1 정규화).
- */
-function detectGlints(data, w, h, opt = {}){
-  const R = opt.R ?? 10, thr = opt.thr ?? 225, minContrast = opt.minContrast ?? 70;
-  const minArea = opt.minArea ?? 2, maxArea = opt.maxArea ?? Math.max(12, Math.round(w * h * 0.0006));
-  const n = w * h, Y = new Uint8ClampedArray(n);
-  for (let i = 0; i < n; i++) Y[i] = (data[4*i] * 77 + data[4*i+1] * 150 + data[4*i+2] * 29) >> 8;
-
-  // 적분 이미지 → 주변 평균 밝기
-  const W1 = w + 1, I = new Uint32Array(W1 * (h + 1));
-  for (let y = 0; y < h; y++){
-    let row = 0;
-    for (let x = 0; x < w; x++){ row += Y[y*w + x]; I[(y+1)*W1 + x+1] = I[y*W1 + x+1] + row; }
-  }
-  const localMean = (x, y) => {
-    const x0 = Math.max(0, x - R), x1 = Math.min(w, x + R + 1), y0 = Math.max(0, y - R), y1 = Math.min(h, y + R + 1);
-    const s = I[y1*W1 + x1] - I[y0*W1 + x1] - I[y1*W1 + x0] + I[y0*W1 + x0];
-    return s / ((x1 - x0) * (y1 - y0));
-  };
-
-  const mask = new Uint8Array(n);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
-    const k = y*w + x;
-    if (Y[k] >= thr && Y[k] - localMean(x, y) >= minContrast) mask[k] = 1;
-  }
-
-  const blobs = [], stack = new Int32Array(n);
-  for (let s = 0; s < n; s++){
-    if (mask[s] !== 1) continue;
-    let sp = 0, area = 0, sx = 0, sy = 0, sY = 0, peak = 0, minx = w, maxx = 0, miny = h, maxy = 0;
-    stack[sp++] = s; mask[s] = 2;
-    while (sp){
-      const k = stack[--sp], x = k % w, y = (k / w) | 0;
-      area++; sx += x; sy += y; sY += Y[k]; if (Y[k] > peak) peak = Y[k];
-      if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
-      if (x > 0 && mask[k-1] === 1){ mask[k-1] = 2; stack[sp++] = k-1; }
-      if (x < w-1 && mask[k+1] === 1){ mask[k+1] = 2; stack[sp++] = k+1; }
-      if (y > 0 && mask[k-w] === 1){ mask[k-w] = 2; stack[sp++] = k-w; }
-      if (y < h-1 && mask[k+w] === 1){ mask[k+w] = 2; stack[sp++] = k+w; }
-    }
-    if (area < minArea || area > maxArea) continue;
-    const bw = maxx - minx + 1, bh = maxy - miny + 1;
-    const fill = area / (bw * bh), aspect = Math.min(bw, bh) / Math.max(bw, bh);
-    if (fill < 0.45 || aspect < 0.5) continue;           // 길쭉하거나 속이 빈 모양은 제외
-    const cx = sx / area, cy = sy / area;
-    const contrast = sY / area - localMean(Math.round(cx), Math.round(cy));
-    const sizeF = (area <= 3 || area > 60) ? 0.7 : 1;
-    const score = Math.min(1, contrast / 200) * (0.5 + 0.5 * fill) * sizeF;
-    blobs.push({ cx: (cx + 0.5) / w, cy: (cy + 0.5) / h, area, contrast, peak, fill, score });
-  }
-  return blobs.sort((a, b) => b.score - a.score).slice(0, 40);
+function triggerPick() {
+  document.getElementById("filePick").click();
 }
 
-/* 프레임 사이에서 같은 반사점을 이어 붙이고, 반사가 가장 강했던 순간의 확대 사진을 보관한다. */
-class GlintScan {
-  constructor(opt = {}){
-    this.radius = opt.radius ?? 0.07; this.gap = opt.gap ?? 2; this.maxTracks = opt.maxTracks ?? 60;
-    this.tracks = []; this.frame = 0; this.nextId = 1;
-    this.work = document.createElement('canvas'); this.nat = document.createElement('canvas');
+function handleFileChange(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  selectedFile = file;
+  const url = URL.createObjectURL(file);
+  const vid = document.getElementById("videoPreview");
+  vid.src = url;
+  vid.classList.add("show");
+  document.getElementById("btnAnalyze").disabled = false;
+  document.getElementById("resultArea").style.display = "none";
+}
+
+document.getElementById("fileRecord").addEventListener("change", handleFileChange);
+document.getElementById("filePick").addEventListener("change", handleFileChange);
+
+async function loadStatus() {
+  const bar = document.getElementById("modelBar");
+  try {
+    const res = await fetch("/api/status", { cache: "no-store" });
+    const data = await res.json();
+    const modelName = data.model || "gemini-2.5-flash";
+    bar.textContent = data.mock ? `모델: ${modelName} (Mock 모드)` : `모델: ${modelName}`;
+  } catch (e) {
+    bar.textContent = "모델: 상태 확인 실패";
   }
-  /** source: video 또는 canvas. 반환: 이번 프레임의 blob 목록 */
-  feed(source, { track = true } = {}){
-    const sw = source.videoWidth || source.width, sh = source.videoHeight || source.height;
-    if (!sw || !sh) return [];
-    this.nat.width = sw; this.nat.height = sh;
-    this.nat.getContext('2d').drawImage(source, 0, 0, sw, sh);
-    const ww = 480, wh = Math.max(1, Math.round(ww * sh / sw));
-    this.work.width = ww; this.work.height = wh;
-    const wctx = this.work.getContext('2d', { willReadFrequently: true });
-    wctx.drawImage(this.nat, 0, 0, ww, wh);
-    const blobs = detectGlints(wctx.getImageData(0, 0, ww, wh).data, ww, wh);
-    if (track) this._update(blobs);
-    return blobs;
-  }
-  _update(blobs){
-    const f = this.frame++, used = new Set();
-    blobs.slice(0, 30).forEach(b => {
-      if (b.score < 0.15) return;
-      let best = null, bd = this.radius;
-      this.tracks.forEach(t => {
-        if (used.has(t) || f - t.last > this.gap) return;
-        const d = Math.hypot(t.cx - b.cx, t.cy - b.cy);
-        if (d < bd){ bd = d; best = t; }
-      });
-      if (best){
-        best.len++; best.last = f; best.cx = b.cx; best.cy = b.cy; used.add(best);
-        if (b.score > best.bestScore){ best.bestScore = b.score; best.shot = this._shot(b); best.blob = b; }
-      } else {
-        const t = { id: this.nextId++, first: f, last: f, len: 1, cx: b.cx, cy: b.cy, bestScore: b.score, blob: b, shot: this._shot(b) };
-        this.tracks.push(t); used.add(t);
+}
+
+function setProgress(pct, text) {
+  document.getElementById("progWrap").classList.add("show");
+  document.getElementById("progFill").style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  document.getElementById("progText").textContent = text;
+}
+
+function waitEvent(target, eventName, timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        target.removeEventListener(eventName, onOk);
+        target.removeEventListener("error", onErr);
+        reject(new Error(`${eventName} 시간 초과`));
       }
+    }, timeoutMs);
+    function onOk(e) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      target.removeEventListener(eventName, onOk);
+      target.removeEventListener("error", onErr);
+      resolve(e);
+    }
+    function onErr() {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      target.removeEventListener(eventName, onOk);
+      target.removeEventListener("error", onErr);
+      reject(new Error("영상 로드 실패"));
+    }
+    target.addEventListener(eventName, onOk, { once: true });
+    target.addEventListener("error", onErr, { once: true });
+  });
+}
+
+async function openVideo(file) {
+  const v = document.createElement("video");
+  v.muted = true;
+  v.playsInline = true;
+  v.preload = "auto";
+  const objUrl = URL.createObjectURL(file);
+  v.src = objUrl;
+  await waitEvent(v, "loadedmetadata", 15000);
+  if (!v.duration || !isFinite(v.duration)) {
+    v.currentTime = 1e6;
+    await waitEvent(v, "seeked", 10000);
+    v.currentTime = 0;
+    await waitEvent(v, "seeked", 10000);
+  }
+  return { video: v, revoke: () => URL.revokeObjectURL(objUrl) };
+}
+
+async function seekAndCapture(v, sec, maxW, quality = 0.82) {
+  const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : CFG.SCAN_SEC;
+  const targetTime = Math.max(0, Math.min(sec, Math.max(0, dur - 0.05)));
+  if (Math.abs((v.currentTime || 0) - targetTime) > 0.04) {
+    v.currentTime = targetTime;
+    await waitEvent(v, "seeked", 10000);
+  }
+  const vw = v.videoWidth || 640;
+  const vh = v.videoHeight || 480;
+  const scale = Math.min(1, maxW / vw);
+  const cw = Math.max(1, Math.round(vw * scale));
+  const ch = Math.max(1, Math.round(vh * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(v, 0, 0, cw, ch);
+  return {
+    dataUrl: canvas.toDataURL("image/jpeg", quality),
+    t: Number(targetTime.toFixed(2)),
+    w: cw,
+    h: ch
+  };
+}
+
+function makeCropFromBox(v, box, outSize, quality = 0.86) {
+  const vw = v.videoWidth || 640;
+  const vh = v.videoHeight || 480;
+  let [x0, y0, x1, y1] = box || [0.15, 0.15, 0.85, 0.85];
+  x0 = Math.max(0, Math.min(1, x0));
+  y0 = Math.max(0, Math.min(1, y0));
+  x1 = Math.max(x0 + 0.05, Math.min(1, x1));
+  y1 = Math.max(y0 + 0.05, Math.min(1, y1));
+
+  const sx = Math.round(x0 * vw);
+  const sy = Math.round(y0 * vh);
+  const sw = Math.max(16, Math.round((x1 - x0) * vw));
+  const sh = Math.max(16, Math.round((y1 - y0) * vh));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outSize;
+  canvas.height = outSize;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, 0, outSize, outSize);
+  const scale = Math.min(outSize / sw, outSize / sh);
+  const dw = Math.round(sw * scale);
+  const dh = Math.round(sh * scale);
+  const dx = Math.round((outSize - dw) / 2);
+  const dy = Math.round((outSize - dh) / 2);
+  ctx.drawImage(v, sx, sy, sw, sh, dx, dy, dw, dh);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+function buildMultiCrops(frameObj) {
+  const crops = [];
+  const rawBox = frameObj.box || frameObj.glasses_box || frameObj.face_box;
+  if (Array.isArray(rawBox) && rawBox.length === 4) {
+    const [x0, y0, x1, y1] = rawBox;
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    const w = Math.max(0.22, x1 - x0);
+    const h = Math.max(0.22, y1 - y0);
+
+    // 1. 확장 전체 프레임/영역
+    crops.push({
+      label: `${frameObj.t}s · 전체 확대`,
+      box: [cx - w * 0.72, cy - h * 0.72, cx + w * 0.72, cy + h * 0.72]
     });
-    if (this.tracks.length > this.maxTracks * 1.5){
-      this.tracks.sort((a, b) => b.bestScore - a.bestScore); this.tracks.length = this.maxTracks;
-    }
+    // 2. 눈·안경테·템플 라인 집중 크롭 (원거리 식별 핵심)
+    crops.push({
+      label: `${frameObj.t}s · 안경/눈라인 집중`,
+      box: [cx - w * 0.65, y0 + h * 0.12, cx + w * 0.65, y0 + h * 0.68]
+    });
+    // 3. 좌·우 다리/힌지/모서리 크롭
+    crops.push({
+      label: `${frameObj.t}s · 좌측 템플/힌지`,
+      box: [x0 - w * 0.15, y0 + h * 0.15, cx + w * 0.08, y0 + h * 0.65]
+    });
+    crops.push({
+      label: `${frameObj.t}s · 우측 템플/힌지`,
+      box: [cx - w * 0.08, y0 + h * 0.15, x1 + w * 0.15, y0 + h * 0.65]
+    });
+  } else {
+    // 박스가 없어도 중앙 상단·중앙 영역을 보수적으로 크롭
+    crops.push({
+      label: `${frameObj.t}s · 중앙 상단`,
+      box: [0.2, 0.12, 0.8, 0.58]
+    });
+    crops.push({
+      label: `${frameObj.t}s · 중앙 전체`,
+      box: [0.15, 0.2, 0.85, 0.8]
+    });
   }
-  _shot(b){
-    const W = this.nat.width, size = Math.max(160, Math.round(W * 0.14));
-    const c = cropNorm(this.nat, { x: b.cx - 0.002, y: b.cy - 0.002, w: 0.004, h: 0.004 },
-                       { pad: 0, minPx: size, square: true, maxOut: 384, maxUp: 2 });
-    c.at = { x: (b.cx - c.rect.x) / c.rect.w, y: (b.cy - c.rect.y) / c.rect.h };
-    return c;
-  }
-  /** 순간적으로 번쩍인 점(짧게 보임)일수록 높은 순위 — 조명·전등처럼 계속 보이는 점은 낮춘다. */
-  ranked(){
-    const life = l => l <= 1 ? 0.8 : l <= 8 ? 1.2 : l <= 16 ? 1.0 : 0.6;
-    return this.tracks.map(t => ({ t, rank: t.bestScore * life(t.len) })).sort((a, b) => b.rank - a.rank);
-  }
+  return crops;
 }
 
-let cam = { stream: null, track: null, torch: false, scan: null, scanning: false, raf: 0, last: 0 };
-
-async function startCam(){
-  $('fmsg').textContent = '';
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    $('fmsg').textContent = '이 브라우저에서는 카메라를 쓸 수 없습니다. 아래 "영상 선택"을 이용하세요.'; return;
-  }
-  try {
-    cam.stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-  } catch (e){
-    $('fmsg').textContent = '카메라 권한이 필요합니다. 주소창의 자물쇠 → 권한에서 카메라를 허용해 주세요.'; return;
-  }
-  const v = $('liveVid'); v.srcObject = cam.stream; await v.play().catch(() => {});
-  $('liveBox').hidden = false; $('scanRow').hidden = false; $('camStart').hidden = true;
-  cam.track = cam.stream.getVideoTracks()[0];
-  const caps = (cam.track.getCapabilities && cam.track.getCapabilities()) || {};
-  if (caps.torch){
-    try { await cam.track.applyConstraints({ advanced: [{ torch: true }] }); cam.torch = true; } catch (e) { cam.torch = false; }
-  }
-  $('torchBtn').hidden = !caps.torch; $('torchBtn').textContent = cam.torch ? '🔦 플래시 켜짐' : '🔦 플래시 꺼짐';
-  if (!caps.torch) $('fmsg').textContent = '이 기기/브라우저는 앱에서 플래시를 켤 수 없습니다. 폰의 손전등을 직접 켜거나, 플래시로 찍은 영상을 선택하세요.';
-  cam.scan = new GlintScan();
-  liveLoop();
-}
-function stopCam(){
-  cancelAnimationFrame(cam.raf); cam.scanning = false;
-  if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
-  cam.stream = null; cam.track = null;
-  $('liveBox').hidden = true; $('scanRow').hidden = true; $('camStart').hidden = false; $('torchBtn').hidden = true;
-}
-$('camStart').onclick = startCam;
-$('camStop').onclick = stopCam;
-$('torchBtn').onclick = async () => {
-  try { await cam.track.applyConstraints({ advanced: [{ torch: !cam.torch }] }); cam.torch = !cam.torch; } catch (e) {}
-  $('torchBtn').textContent = cam.torch ? '🔦 플래시 켜짐' : '🔦 플래시 꺼짐';
-};
-
-/* 미리보기 위에 지금 보이는 반사점을 실시간으로 표시 → 어디를 겨냥할지 감을 잡을 수 있다. */
-function liveLoop(){
-  cam.raf = requestAnimationFrame(liveLoop);
-  const now = performance.now();
-  if (now - cam.last < 120) return;
-  cam.last = now;
-  const v = $('liveVid'), ov = $('liveOv');
-  if (!v.videoWidth) return;
-  const blobs = cam.scan.feed(v, { track: cam.scanning });
-  ov.width = ov.clientWidth || 320; ov.height = ov.clientHeight || 180;
-  const ctx = ov.getContext('2d'); ctx.clearRect(0, 0, ov.width, ov.height);
-  // object-fit: contain 가정 없이 video가 컨테이너를 가득 채우므로 비율만 맞춘다.
-  blobs.filter(b => b.score >= 0.25).slice(0, 8).forEach(b => {
-    ctx.beginPath(); ctx.arc(b.cx * ov.width, b.cy * ov.height, 12, 0, Math.PI * 2);
-    ctx.lineWidth = 3; ctx.strokeStyle = '#ff3b30'; ctx.stroke();
+async function postJson(url, payload) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
   });
-}
-
-$('scanBtn').onclick = async () => {
-  if (cam.scanning || !cam.scan) return;
-  cam.scan = new GlintScan(); cam.scanning = true;
-  $('scanBtn').disabled = true; $('fbarw').hidden = false; $('fout').hidden = true;
-  const t0 = performance.now();
-  while (performance.now() - t0 < CFG.SCAN_SEC * 1000){
-    const p = (performance.now() - t0) / (CFG.SCAN_SEC * 1000);
-    $('fbar').style.width = (p * 100) + '%';
-    $('fmsg').textContent = '스캔 중… 폰을 천천히 훑어주세요 (' + Math.max(0, Math.ceil(CFG.SCAN_SEC * (1 - p))) + '초)';
-    await sleep(200);
-  }
-  cam.scanning = false;
-  try { await finishScan(cam.scan); }
-  catch (e){ $('fmsg').textContent = '오류: ' + e.message; }
-  $('scanBtn').disabled = false; setTimeout(() => $('fbarw').hidden = true, 500);
-};
-
-$('flashFile').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  $('fout').hidden = true; $('fbarw').hidden = false; $('fbar').style.width = '0';
+  let data = null;
   try {
-    const v = await loadVideo(f);
-    const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 5;
-    const n = clamp(Math.round(dur * 6), 12, 60), scan = new GlintScan({ gap: 2 });
-    for (let i = 0; i < n; i++){
-      await seek(v, clamp(dur * (i + 0.5) / n, 0, Math.max(0, dur - 0.05)));
-      scan.feed(v);
-      $('fbar').style.width = (i + 1) / n * 60 + '%';
-      $('fmsg').textContent = '영상에서 반사점 찾는 중… ' + (i + 1) + '/' + n;
+    data = await res.json();
+  } catch (e) {
+    throw new Error(`HTTP ${res.status} (응답 JSON 파싱 실패)`);
+  }
+  if (!res.ok) {
+    throw new Error(data && data.error ? data.error : `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+async function startAnalysis() {
+  if (!selectedFile) return;
+  const btn = document.getElementById("btnAnalyze");
+  btn.disabled = true;
+  document.getElementById("resultArea").style.display = "none";
+
+  let opened = null;
+  let hiOpened = null;
+
+  try {
+    setProgress(8, "영상을 여는 중...");
+    opened = await openVideo(selectedFile);
+    const v = opened.video;
+    const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : CFG.SCAN_SEC;
+
+    const times = [];
+    for (let i = 0; i < CFG.N_FRAMES; i++) {
+      const ratio = CFG.N_FRAMES === 1 ? 0.5 : i / (CFG.N_FRAMES - 1);
+      const t = Math.min(Math.max(0.15, ratio * Math.max(0.3, dur - 0.2)), Math.max(0.1, dur - 0.05));
+      times.push(Number(t.toFixed(2)));
     }
-    await finishScan(scan);
-  } catch (err){ $('fmsg').textContent = '오류: ' + err.message; }
-  setTimeout(() => $('fbarw').hidden = true, 500);
-  e.target.value = '';
-};
 
-const SRC_KO = { camera_lens:'카메라 렌즈', eye:'눈(각막)', eyeglass_lens:'안경 렌즈', jewelry:'장신구',
-  metal_hardware:'금속 부품(단추·지퍼 등)', screen:'화면', glossy_surface:'광택 표면', other:'기타' };
+    setProgress(20, `${times.length}개 프레임 추출 중...`);
+    const frames = [];
+    for (let i = 0; i < times.length; i++) {
+      const cap = await seekAndCapture(v, times[i], CFG.STAGE1_W, 0.8);
+      frames.push(cap);
+      setProgress(20 + Math.round(((i + 1) / times.length) * 15), `프레임 ${i + 1}/${times.length} 추출 완료`);
+    }
 
-async function finishScan(scan){
-  const ranked = scan.ranked().filter(x => x.rank >= 0.2 && x.t.shot);
-  const top = ranked.slice(0, CFG.GLINT_TOP);
-  $('fout').hidden = false;
-  if (!top.length){
-    $('fsum').innerHTML = '<div class="verdict">반사점: <span class="lo">뚜렷한 렌즈형 반사 없음</span></div>' +
-      '<p class="note">어둡게 하고, 더 가까이(1~2m) 겨냥해서 위아래·좌우로 천천히 다시 훑어 보세요. 이것이 카메라가 없다는 뜻은 아닙니다.</p>';
-    $('fgrid').innerHTML = ''; $('fmsg').textContent = ''; return;
+    setProgress(38, "1차 AI 분석 중...");
+    let analyzeData = null;
+    let topLevelError = "";
+    try {
+      analyzeData = await postJson("/api/analyze", {
+        mode,
+        frames: frames.map(f => ({ t: f.t, image: f.dataUrl })),
+        high_recall: true
+      });
+    } catch (err) {
+      topLevelError = err.message || String(err);
+    }
+
+    const rawResults = (analyzeData && Array.isArray(analyzeData.results)) ? analyzeData.results : [];
+    const mergedFrames = frames.map((f, idx) => {
+      const r = rawResults[idx] || {};
+      const errReason = r.error || topLevelError || "";
+      return {
+        ...f,
+        ...r,
+        error: errReason
+      };
+    });
+
+    // 고감도 기준: 안경/사람/의심 요소가 있거나 실패한 프레임이 있어도 주요 프레임에서 크롭 후보 구성
+    const candidateFrames = mergedFrames.filter(f => !f.error || f.glasses_detected || f.person_detected);
+    const cropSourceFrames = (candidateFrames.length > 0 ? candidateFrames : mergedFrames.filter(f => !f.error)).slice(0, CFG.MAX_GLASSES_JOBS);
+
+    const refineItems = [];
+    if (cropSourceFrames.length > 0) {
+      setProgress(62, "의심 부위 확대 재분석 준비 중...");
+      hiOpened = await openVideo(selectedFile);
+      const hv = hiOpened.video;
+
+      for (const cf of cropSourceFrames) {
+        await seekAndCapture(hv, cf.t, CFG.HI_W, 0.9);
+        const multi = buildMultiCrops(cf);
+        for (const c of multi) {
+          if (refineItems.length >= CFG.MAX_GLASSES_JOBS) break;
+          const cropDataUrl = makeCropFromBox(hv, c.box, CFG.CROP_OUT, 0.85);
+          refineItems.push({
+            t: cf.t,
+            label: c.label,
+            image: cropDataUrl
+          });
+        }
+        if (refineItems.length >= CFG.MAX_GLASSES_JOBS) break;
+      }
+    }
+
+    let refineResults = [];
+    if (refineItems.length > 0) {
+      setProgress(80, `확대 크롭 ${refineItems.length}장 재분석 중...`);
+      try {
+        const refResp = await postJson("/api/refine", {
+          mode,
+          crops: refineItems.map(item => ({ t: item.t, label: item.label, image: item.image })),
+          high_recall: true
+        });
+        refineResults = Array.isArray(refResp.results) ? refResp.results : [];
+      } catch (refErr) {
+        refineResults = refineItems.map(item => ({
+          t: item.t,
+          label: item.label,
+          image: item.image,
+          error: refErr.message || String(refErr)
+        }));
+      }
+    }
+
+    setProgress(100, "분석 완료");
+    renderResults({
+      mergedFrames,
+      refineItems,
+      refineResults,
+      topLevelError
+    });
+  } catch (fatalErr) {
+    renderFatalError(fatalErr.message || String(fatalErr));
+  } finally {
+    if (opened && opened.revoke) opened.revoke();
+    if (hiOpened && hiOpened.revoke) hiOpened.revoke();
+    btn.disabled = false;
   }
-  $('fmsg').textContent = '반사점 ' + top.length + '곳을 AI가 확대해서 확인하는 중…';
-  $('fbar').style.width = '80%';
-  const r = await postJSON('/api/refine', {
-    crops: top.map(x => ({ image: x.t.shot.canvas.toDataURL('image/jpeg', 0.9), kind: 'glint' })) });
-  top.forEach((x, k) => { x.res = r.results[k]; });
-  $('fbar').style.width = '100%'; $('fmsg').textContent = '';
-  renderFlash(top, ranked.length, r.mock);
 }
 
-function renderFlash(top, totalCands, mock){
-  const okRes = top.filter(x => x.res && !x.res.error);
-  const hits = okRes.filter(x => ['possible', 'likely'].includes(x.res.is_camera) && conf01(x.res.confidence) >= 0.35)
-    .sort((a, b) => conf01(b.res.confidence) - conf01(a.res.confidence));
-  let h = '';
-  if (mock) h += '<p class="note">⚠ 데모 결과입니다. 실제 분석이 아닙니다.</p>';
-  const lvl = hits.length ? levelOf(conf01(hits[0].res.confidence)) : 'lo';
-  h += '<div class="verdict">렌즈 가능성 있는 반사점: <span class="' + lvl + '">' + (hits.length ? hits.length + '곳' : '없음') + '</span></div>';
-  if (hits.length){
-    h += '<ul>' + hits.map(x => '<li><b>' + esc(x.res.object || '물체') + '</b> · ' + (SRC_KO[x.res.source] || '') + ' · ' +
-      Math.round(conf01(x.res.confidence) * 100) + '% <span class="note">· 화면 ' + (x.t.cx < 0.4 ? '왼쪽' : x.t.cx > 0.6 ? '오른쪽' : '가운데') + ' ' +
-      (x.t.cy < 0.4 ? '위' : x.t.cy > 0.6 ? '아래' : '') + ' ' + esc(x.res.evidence || '') + '</span></li>').join('') + '</ul>';
-  }
-  const rej = okRes.length - hits.length;
-  if (rej > 0) h += '<p class="note" style="margin:6px 0 0">나머지 ' + rej + '곳은 눈·안경 렌즈·금속 부품 등 렌즈가 아닌 반사로 보입니다.</p>';
-  if (totalCands > top.length) h += '<p class="note" style="margin:6px 0 0">반사 후보 ' + totalCands + '곳 중 가장 뚜렷한 ' + top.length + '곳만 확인했습니다.</p>';
-  const bad = top.length - okRes.length;
-  if (bad) h += '<p class="note">' + bad + '곳은 분석에 실패했습니다.</p>';
-  $('fsum').innerHTML = h;
-
-  const g = $('fgrid'); g.innerHTML = '';
-  top.forEach(x => {
-    const s = x.t.shot, c = document.createElement('canvas'); c.width = s.canvas.width; c.height = s.canvas.height;
-    const ctx = c.getContext('2d'); ctx.drawImage(s.canvas, 0, 0);
-    ctx.beginPath(); ctx.arc(s.at.x * c.width, s.at.y * c.height, Math.max(14, c.width * 0.05), 0, Math.PI * 2);
-    ctx.lineWidth = Math.max(2, c.width / 150); ctx.strokeStyle = '#ff3b30'; ctx.stroke();
-    const res = x.res && !x.res.error ? x.res : null;
-    const t = res
-      ? '<b>' + (SRC_KO[res.source] || '반사점') + '</b> · ' + (IS_CAM_KO[res.is_camera] || '') + ' ' + Math.round(conf01(res.confidence) * 100) + '%<br><span class="note">' + esc(res.object || '') + ' ' + esc(res.evidence || '') + ' (보인 프레임 ' + x.t.len + '개)</span>'
-      : '<span class="note">' + esc(x.res ? x.res.error : '결과 없음') + '</span>';
-    const d = document.createElement('div'); d.className = 'zc'; d.appendChild(c);
-    const tt = document.createElement('div'); tt.className = 't'; tt.innerHTML = t; d.appendChild(tt);
-    d.onclick = () => zoom(c, tt.textContent); g.appendChild(d);
-  });
+function renderFatalError(msg) {
+  const area = document.getElementById("resultArea");
+  area.style.display = "block";
+  document.getElementById("summaryCard").innerHTML = `
+    <span class="badge b-bad">분석 오류</span>
+    <div class="sum-title">분석을 완료하지 못했습니다.</div>
+    <div class="err-box">사유: ${escapeHtml(msg)}</div>
+  `;
+  document.getElementById("refineBody").innerHTML = `<p class="hint">확대 재분석 데이터가 없습니다.</p>`;
+  document.getElementById("framesBody").innerHTML = `<p class="hint">프레임 데이터가 없습니다.</p>`;
 }
+
+function renderResults({ mergedFrames, refineItems, refineResults, topLevelError }) {
+  const area = document.getElementById("resultArea");
+  area.style.display = "block";
+
+  const totalCount = mergedFrames.length;
+  const failedFrames = mergedFrames.filter(f => Boolean(f.error));
+  const okFrames = mergedFrames.filter(f => !f.error);
+
+  const reasons = Array.from(new Set(failedFrames.map(f => f.error).filter(Boolean)));
+  const reasonText = reasons.length > 0
+    ? reasons.join(" / ")
+    : (topLevelError || "서버 응답 오류 또는 타임아웃");
+
+  const glassesSuspectCount = okFrames.filter(f =>
+    f.smart_glasses_suspected || f.glasses_detected || f.suspicious || (Number(f.score || 0) >= 0.35)
+  ).length;
+
+  const camSuspectCount = okFrames.filter(f =>
+    f.hidden_camera_suspected || f.camera_detected
+  ).length;
+
+  const refineSuspectCount = refineResults.filter(r =>
+    !r.error && (r.smart_glasses_suspected || r.glasses_detected || r.suspicious || (Number(r.score || 0) >= 0.35))
+  ).length;
+
+  let badgeClass = "b-ok";
+  let headline = "스마트 안경 의심 징후 약함";
+  let desc = "추출된 프레임에서 뚜렷한 스마트 안경 의심 요소가 두드러지지 않았습니다.";
+
+  if (glassesSuspectCount > 0 || refineSuspectCount > 0) {
+    badgeClass = "b-bad";
+    headline = `스마트 안경 의심 감지 (1차 ${glassesSuspectCount}건 · 확대 ${refineSuspectCount}건)`;
+    desc = "고감도 기준으로 테 두께, 힌지/다리 구조, 모서리 센서/렌즈 또는 반사 의심 패턴이 포착되었습니다.";
+  } else if (okFrames.length > 0) {
+    badgeClass = "b-warn";
+    headline = "일반 안경 또는 의심 경계 수준";
+    desc = "일부 프레임에서 안경 또는 유사 구조가 보였으나, 강한 스마트 안경 특성은 낮게 평가되었습니다.";
+  }
+
+  const failHtml = failedFrames.length > 0
+    ? `<div class="err-box">${failedFrames.length}개 프레임은 분석에 실패했습니다. (사유: ${escapeHtml(reasonText)})</div>`
+    : "";
+
+  document.getElementById("summaryCard").innerHTML = `
+    <span class="badge ${badgeClass}">${mode === "flash" ? "플래시 스캔" : "일반 분석"}</span>
+    <div class="sum-title">안경: ${escapeHtml(headline)}</div>
+    <p class="sum-desc">${escapeHtml(desc)}</p>
+    <div class="sum-desc" style="margin-bottom:4px;">
+      <strong>초소형 카메라 후보:</strong> ${camSuspectCount > 0 ? `${camSuspectCount}건 의심` : "발견 안 됨"}
+      · <strong>성공 프레임:</strong> ${okFrames.length}/${totalCount}
+    </div>
+    ${failHtml}
+  `;
+
+  // 확대 재분석 카드 렌더
+  const refineBody = document.getElementById("refineBody");
+  if (!refineItems || refineItems.length === 0) {
+    refineBody.innerHTML = `<p class="hint">확대해서 볼 의심 부위가 없었거나 프레임 분석이 완료되지 않았습니다.</p>`;
+  } else {
+    refineBody.innerHTML = refineItems.map((item, idx) => {
+      const r = refineResults[idx] || {};
+      const statusText = r.error
+        ? `실패 (${r.error})`
+        : (r.smart_glasses_suspected || r.glasses_detected || r.suspicious ? "의심 요소 포착" : "특이점 낮음");
+      const detail = r.error ? r.error : (r.reason || r.note || "확대 크롭 검토 완료");
+      return `
+        <div class="thumb-card" onclick="openModal('${escapeAttr(item.image)}', '${escapeAttr(item.label + ' — ' + statusText + ' (' + detail + ')')}')">
+          <img src="${item.image}" alt="${escapeAttr(item.label)}">
+          <div class="thumb-meta">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${escapeHtml(statusText)}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // 프레임별 카드 렌더
+  const framesBody = document.getElementById("framesBody");
+  framesBody.innerHTML = mergedFrames.map(f => {
+    const label = f.error
+      ? `실패 (${f.error})`
+      : (f.smart_glasses_suspected || f.glasses_detected ? "안경/의심 감지" : (f.person_detected ? "인물 확인됨" : "특이점 없음"));
+    const sub = f.error ? f.error : (f.reason || f.note || "");
+    return `
+      <div class="thumb-card" onclick="openModal('${escapeAttr(f.image)}', '${escapeAttr(f.t + 's — ' + label + (sub ? ' / ' + sub : ''))}')">
+        <img src="${f.image}" alt="${f.t}s 프레임">
+        <div class="thumb-meta">
+          <strong>${f.t}s 프레임</strong>
+          <span>${escapeHtml(label)}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function openModal(src, caption) {
+  document.getElementById("modalImg").src = src;
+  document.getElementById("modalCaption").textContent = caption;
+  document.getElementById("modalBg").classList.add("show");
+}
+
+function closeModal() {
+  document.getElementById("modalBg").classList.remove("show");
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/'/g, "&#39;");
+}
+
+loadStatus();
 </script>
 </body>
 </html>
