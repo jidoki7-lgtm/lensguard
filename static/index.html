@@ -1,648 +1,229 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LensGuard — 스마트(AI) 안경 · 초소형 카메라 탐지</title>
-<style>
-  :root {
-    --bg: #f4f6f9;
-    --card: #ffffff;
-    --ink: #111827;
-    --muted: #6b7280;
-    --line: #e5e7eb;
-    --brand: #1d4ed8;
-    --brand-soft: #eff6ff;
-    --ok: #047857;
-    --ok-bg: #ecfdf5;
-    --warn: #b45309;
-    --warn-bg: #fffbeb;
-    --bad: #b91c1c;
-    --bad-bg: #fef2f2;
-    --r: 14px;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-    line-height: 1.5;
-  }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 18px 14px 48px; }
-  h1 { font-size: 1.35rem; margin: 0 0 4px; letter-spacing: -0.02em; }
-  .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 14px; }
-
-  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-  .tab {
-    flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
-    background: var(--card); color: var(--ink); font-weight: 600; font-size: 0.92rem; cursor: pointer;
-  }
-  .tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
-
-  .model-bar { font-size: 0.85rem; color: var(--muted); margin: 2px 0 12px; }
-  .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
-    padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-  }
-  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  button.action {
-    padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
-    background: var(--card); color: var(--ink); font-weight: 600; font-size: 0.95rem; cursor: pointer;
-  }
-  button.action.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
-  button.action:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-full { width: 100%; margin-top: 12px; }
-
-  .hint { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
-  video.preview {
-    width: 100%; max-height: 280px; border-radius: 10px; background: #000;
-    margin-top: 12px; display: none;
-  }
-  video.preview.show { display: block; }
-
-  .prog-wrap { margin-top: 12px; display: none; }
-  .prog-wrap.show { display: block; }
-  .prog-track { height: 8px; background: #e5e7eb; border-radius: 999px; overflow: hidden; }
-  .prog-fill { height: 100%; width: 0%; background: var(--brand); transition: width 0.25s ease; }
-  .prog-text { font-size: 0.84rem; color: var(--muted); margin-top: 6px; }
-
-  .badge {
-    display: inline-block; padding: 3px 10px; border-radius: 999px;
-    font-size: 0.82rem; font-weight: 700; margin-bottom: 6px;
-  }
-  .b-ok { background: var(--ok-bg); color: var(--ok); }
-  .b-warn { background: var(--warn-bg); color: var(--warn); }
-  .b-bad { background: var(--bad-bg); color: var(--bad); }
-
-  .sum-title { font-size: 1.15rem; font-weight: 700; margin: 4px 0 6px; }
-  .sum-desc { color: var(--muted); font-size: 0.92rem; margin: 0 0 10px; }
-  .err-box {
-    background: var(--bad-bg); color: var(--bad); border: 1px solid #fecaca;
-    border-radius: 10px; padding: 10px 12px; font-size: 0.86rem; margin-top: 8px;
-    white-space: pre-wrap; word-break: break-word;
-  }
-
-  .grid-2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
-  .thumb-card {
-    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fafafa; cursor: pointer;
-  }
-  .thumb-card img { width: 100%; height: 130px; object-fit: cover; display: block; }
-  .thumb-meta { padding: 8px 10px; font-size: 0.8rem; }
-  .thumb-meta strong { display: block; margin-bottom: 2px; }
-
-  .modal-bg {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: none;
-    align-items: center; justify-content: center; padding: 16px; z-index: 999;
-  }
-  .modal-bg.show { display: flex; }
-  .modal-box {
-    background: #fff; border-radius: 14px; max-width: 640px; width: 100%;
-    padding: 14px; max-height: 90vh; overflow: auto;
-  }
-  .modal-box img { width: 100%; border-radius: 8px; display: block; margin-bottom: 10px; }
-
-  .disc { font-size: 0.78rem; color: var(--muted); line-height: 1.55; margin-top: 18px; }
-  input[type="file"] { display: none; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LensGuard</title>
+  <link rel="manifest" href="/manifest.json" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+      background: #f4f6fb;
+      color: #161922;
+      padding: 16px;
+    }
+    .wrap {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 6px;
+    }
+    .sub {
+      font-size: 13px;
+      color: #5b6275;
+      margin: 0 0 12px;
+    }
+    input[type="file"] {
+      width: 100%;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    video {
+      width: 100%;
+      border-radius: 12px;
+      background: #000;
+      max-height: 260px;
+      display: block;
+      margin-bottom: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      border: 0;
+      border-radius: 12px;
+      background: #1d5cff;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #9bb3f5;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #2b3348;
+    }
+    .err {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #fff0f0;
+      color: #b42318;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #e8f0ff;
+      color: #1d5cff;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    pre {
+      background: #f6f8fa;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>LensGuard</h1>
-  <p class="sub">스마트(AI) 안경과 초소형 카메라 의심 요소를 AI로 분석합니다.</p>
-
-  <div class="tabs">
-    <button type="button" class="tab active" id="tabNormal" onclick="setMode('normal')">일반 분석</button>
-    <button type="button" class="tab" id="tabFlash" onclick="setMode('flash')">🔦 플래시 스캔</button>
-  </div>
-
-  <div class="model-bar" id="modelBar">모델: 확인 중...</div>
-
-  <div class="card">
-    <div class="btn-row">
-      <button type="button" class="action" id="btnRecord" onclick="triggerRecord()">🎥 영상 촬영</button>
-      <button type="button" class="action" id="btnPick" onclick="triggerPick()">📁 영상 선택</button>
+  <div class="wrap">
+    <div class="card">
+      <h1>LensGuard</h1>
+      <p class="sub">1프레임 테스트 모드 · 영상을 선택하고 분석 시작을 누르세요.</p>
+      <input id="videoInput" type="file" accept="video/*" />
+      <video id="videoPreview" controls playsinline muted></video>
+      <button id="analyzeBtn" disabled>분석 시작</button>
+      <div id="statusText" class="status">영상을 선택해 주세요.</div>
+      <div id="errorBox" class="err" style="display:none;"></div>
     </div>
 
-    <input type="file" id="fileRecord" accept="video/*" capture="environment">
-    <input type="file" id="filePick" accept="video/*">
-
-    <video id="videoPreview" class="preview" controls playsinline></video>
-
-    <p class="hint" id="modeHint">
-      5~10초, 얼굴과 안경을 화면에 크게, 밝은 곳에서 천천히 좌우로 돌려가며 촬영하면 정확도가 올라갑니다. 1차로 전체를 보고, 의심 부위는 확대해서 한 번 더 분석합니다.
-    </p>
-
-    <button type="button" class="action primary btn-full" id="btnAnalyze" onclick="startAnalysis()" disabled>분석 시작</button>
-
-    <div class="prog-wrap" id="progWrap">
-      <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
-      <div class="prog-text" id="progText">준비 중...</div>
+    <div id="resultCard" class="card" style="display:none;">
+      <div class="badge">분석 결과</div>
+      <div id="summaryText"></div>
+      <pre id="rawJson"></pre>
     </div>
   </div>
 
-  <div id="resultArea" style="display:none;">
-    <div class="card" id="summaryCard"></div>
-    <div class="card" id="refineCard">
-      <strong>🔍 확대 재분석</strong> <span class="hint">(의심 부위를 잘라 다시 본 결과 · 탭하면 크게 보기)</span>
-      <div id="refineBody" class="grid-2"></div>
-    </div>
-    <div class="card" id="framesCard">
-      <strong>프레임별 결과</strong>
-      <div id="framesBody" class="grid-2"></div>
-    </div>
-  </div>
+  <script>
+    const FRAME_COUNT = 1; // 429 한도 테스트를 위해 1프레임만 전송
 
-  <div class="modal-bg" id="modalBg" onclick="closeModal(event)">
-    <div class="modal-box" onclick="event.stopPropagation()">
-      <img id="modalImg" src="" alt="확대 이미지">
-      <div id="modalCaption" class="hint" style="margin-top:0;"></div>
-      <button type="button" class="action btn-full" onclick="closeModal()">닫기</button>
-    </div>
-  </div>
+    const videoInput = document.getElementById("videoInput");
+    const videoPreview = document.getElementById("videoPreview");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const statusText = document.getElementById("statusText");
+    const errorBox = document.getElementById("errorBox");
+    const resultCard = document.getElementById("resultCard");
+    const summaryText = document.getElementById("summaryText");
+    const rawJson = document.getElementById("rawJson");
 
-  <p class="disc">
-    ※ 이 결과는 AI와 이미지 처리에 의한 추정이며 오탐·미탐이 있습니다. "발견 안 됨"이 안전하다는 뜻이 아닙니다. 영상은 분석 목적으로만 쓰이고 서버에 저장되지 않으며, 사람의 신원은 식별하지 않습니다. 타인을 촬영할 때는 해당 지역의 법과 상대방의 사생활을 존중해 주세요.
-  </p>
-</div>
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = "block";
+    }
 
-<script>
-const CFG = {
-  N_FRAMES: 3,
-  STAGE1_W: 960,
-  HI_W: 1600,
-  MAX_GLASSES_JOBS: 3,
-  MAX_CAM_JOBS: 2,
-  CROP_OUT: 768,
-  GLINT_TOP: 6,
-  SCAN_SEC: 10
-};
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.style.display = "none";
+    }
 
-let mode = "normal";
-let selectedFile = null;
-let hiVideoEl = null;
-
-function setMode(nextMode) {
-  mode = nextMode;
-  document.getElementById("tabNormal").classList.toggle("active", mode === "normal");
-  document.getElementById("tabFlash").classList.toggle("active", mode === "flash");
-  document.getElementById("modeHint").textContent = mode === "flash"
-    ? "어두운 환경에서 플래시를 비추며 렌즈·금속·센서 반사점을 훑듯 촬영해 주세요. 의심 반사 부위를 확대해 다시 확인합니다."
-    : "5~10초, 얼굴과 안경을 화면에 크게, 밝은 곳에서 천천히 좌우로 돌려가며 촬영하면 정확도가 올라갑니다. 1차로 전체를 보고, 의심 부위는 확대해서 한 번 더 분석합니다.";
-}
-
-function triggerRecord() {
-  document.getElementById("fileRecord").click();
-}
-
-function triggerPick() {
-  document.getElementById("filePick").click();
-}
-
-function handleFileChange(ev) {
-  const file = ev.target.files && ev.target.files[0];
-  if (!file) return;
-  selectedFile = file;
-  const url = URL.createObjectURL(file);
-  const vid = document.getElementById("videoPreview");
-  vid.src = url;
-  vid.classList.add("show");
-  document.getElementById("btnAnalyze").disabled = false;
-  document.getElementById("resultArea").style.display = "none";
-}
-
-document.getElementById("fileRecord").addEventListener("change", handleFileChange);
-document.getElementById("filePick").addEventListener("change", handleFileChange);
-
-async function loadStatus() {
-  const bar = document.getElementById("modelBar");
-  try {
-    const res = await fetch("/api/status", { cache: "no-store" });
-    const data = await res.json();
-    const modelName = data.model || "gemini-2.5-flash";
-    bar.textContent = data.mock ? `모델: ${modelName} (Mock 모드)` : `모델: ${modelName}`;
-  } catch (e) {
-    bar.textContent = "모델: 상태 확인 실패";
-  }
-}
-
-function setProgress(pct, text) {
-  document.getElementById("progWrap").classList.add("show");
-  document.getElementById("progFill").style.width = `${Math.max(0, Math.min(100, pct))}%`;
-  document.getElementById("progText").textContent = text;
-}
-
-function waitEvent(target, eventName, timeoutMs = 12000) {
-  return new Promise((resolve, reject) => {
-    let done = false;
-    const timer = setTimeout(() => {
-      if (!done) {
-        done = true;
-        target.removeEventListener(eventName, onOk);
-        target.removeEventListener("error", onErr);
-        reject(new Error(`${eventName} 시간 초과`));
+    videoInput.addEventListener("change", () => {
+      clearError();
+      resultCard.style.display = "none";
+      const file = videoInput.files && videoInput.files[0];
+      if (!file) {
+        analyzeBtn.disabled = true;
+        statusText.textContent = "영상을 선택해 주세요.";
+        return;
       }
-    }, timeoutMs);
-    function onOk(e) {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      target.removeEventListener(eventName, onOk);
-      target.removeEventListener("error", onErr);
-      resolve(e);
-    }
-    function onErr() {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      target.removeEventListener(eventName, onOk);
-      target.removeEventListener("error", onErr);
-      reject(new Error("영상 로드 실패"));
-    }
-    target.addEventListener(eventName, onOk, { once: true });
-    target.addEventListener("error", onErr, { once: true });
-  });
-}
-
-async function openVideo(file) {
-  const v = document.createElement("video");
-  v.muted = true;
-  v.playsInline = true;
-  v.preload = "auto";
-  const objUrl = URL.createObjectURL(file);
-  v.src = objUrl;
-  await waitEvent(v, "loadedmetadata", 15000);
-  if (!v.duration || !isFinite(v.duration)) {
-    v.currentTime = 1e6;
-    await waitEvent(v, "seeked", 10000);
-    v.currentTime = 0;
-    await waitEvent(v, "seeked", 10000);
-  }
-  return { video: v, revoke: () => URL.revokeObjectURL(objUrl) };
-}
-
-async function seekAndCapture(v, sec, maxW, quality = 0.82) {
-  const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : CFG.SCAN_SEC;
-  const targetTime = Math.max(0, Math.min(sec, Math.max(0, dur - 0.05)));
-  if (Math.abs((v.currentTime || 0) - targetTime) > 0.04) {
-    v.currentTime = targetTime;
-    await waitEvent(v, "seeked", 10000);
-  }
-  const vw = v.videoWidth || 640;
-  const vh = v.videoHeight || 480;
-  const scale = Math.min(1, maxW / vw);
-  const cw = Math.max(1, Math.round(vw * scale));
-  const ch = Math.max(1, Math.round(vh * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = cw;
-  canvas.height = ch;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(v, 0, 0, cw, ch);
-  return {
-    dataUrl: canvas.toDataURL("image/jpeg", quality),
-    t: Number(targetTime.toFixed(2)),
-    w: cw,
-    h: ch
-  };
-}
-
-function makeCropFromBox(v, box, outSize, quality = 0.86) {
-  const vw = v.videoWidth || 640;
-  const vh = v.videoHeight || 480;
-  let [x0, y0, x1, y1] = box || [0.15, 0.15, 0.85, 0.85];
-  x0 = Math.max(0, Math.min(1, x0));
-  y0 = Math.max(0, Math.min(1, y0));
-  x1 = Math.max(x0 + 0.05, Math.min(1, x1));
-  y1 = Math.max(y0 + 0.05, Math.min(1, y1));
-
-  const sx = Math.round(x0 * vw);
-  const sy = Math.round(y0 * vh);
-  const sw = Math.max(16, Math.round((x1 - x0) * vw));
-  const sh = Math.max(16, Math.round((y1 - y0) * vh));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = outSize;
-  canvas.height = outSize;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#111";
-  ctx.fillRect(0, 0, outSize, outSize);
-  const scale = Math.min(outSize / sw, outSize / sh);
-  const dw = Math.round(sw * scale);
-  const dh = Math.round(sh * scale);
-  const dx = Math.round((outSize - dw) / 2);
-  const dy = Math.round((outSize - dh) / 2);
-  ctx.drawImage(v, sx, sy, sw, sh, dx, dy, dw, dh);
-  return canvas.toDataURL("image/jpeg", quality);
-}
-
-function buildMultiCrops(frameObj) {
-  const crops = [];
-  const rawBox = frameObj.box || frameObj.glasses_box || frameObj.face_box;
-  if (Array.isArray(rawBox) && rawBox.length === 4) {
-    const [x0, y0, x1, y1] = rawBox;
-    const cx = (x0 + x1) / 2;
-    const cy = (y0 + y1) / 2;
-    const w = Math.max(0.22, x1 - x0);
-    const h = Math.max(0.22, y1 - y0);
-
-    // 1. 확장 전체 프레임/영역
-    crops.push({
-      label: `${frameObj.t}s · 전체 확대`,
-      box: [cx - w * 0.72, cy - h * 0.72, cx + w * 0.72, cy + h * 0.72]
-    });
-    // 2. 눈·안경테·템플 라인 집중 크롭 (원거리 식별 핵심)
-    crops.push({
-      label: `${frameObj.t}s · 안경/눈라인 집중`,
-      box: [cx - w * 0.65, y0 + h * 0.12, cx + w * 0.65, y0 + h * 0.68]
-    });
-    // 3. 좌·우 다리/힌지/모서리 크롭
-    crops.push({
-      label: `${frameObj.t}s · 좌측 템플/힌지`,
-      box: [x0 - w * 0.15, y0 + h * 0.15, cx + w * 0.08, y0 + h * 0.65]
-    });
-    crops.push({
-      label: `${frameObj.t}s · 우측 템플/힌지`,
-      box: [cx - w * 0.08, y0 + h * 0.15, x1 + w * 0.15, y0 + h * 0.65]
-    });
-  } else {
-    // 박스가 없어도 중앙 상단·중앙 영역을 보수적으로 크롭
-    crops.push({
-      label: `${frameObj.t}s · 중앙 상단`,
-      box: [0.2, 0.12, 0.8, 0.58]
-    });
-    crops.push({
-      label: `${frameObj.t}s · 중앙 전체`,
-      box: [0.15, 0.2, 0.85, 0.8]
-    });
-  }
-  return crops;
-}
-
-async function postJson(url, payload) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch (e) {
-    throw new Error(`HTTP ${res.status} (응답 JSON 파싱 실패)`);
-  }
-  if (!res.ok) {
-    throw new Error(data && data.error ? data.error : `HTTP ${res.status}`);
-  }
-  return data;
-}
-
-async function startAnalysis() {
-  if (!selectedFile) return;
-  const btn = document.getElementById("btnAnalyze");
-  btn.disabled = true;
-  document.getElementById("resultArea").style.display = "none";
-
-  let opened = null;
-  let hiOpened = null;
-
-  try {
-    setProgress(8, "영상을 여는 중...");
-    opened = await openVideo(selectedFile);
-    const v = opened.video;
-    const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : CFG.SCAN_SEC;
-
-    const times = [];
-    for (let i = 0; i < CFG.N_FRAMES; i++) {
-      const ratio = CFG.N_FRAMES === 1 ? 0.5 : i / (CFG.N_FRAMES - 1);
-      const t = Math.min(Math.max(0.15, ratio * Math.max(0.3, dur - 0.2)), Math.max(0.1, dur - 0.05));
-      times.push(Number(t.toFixed(2)));
-    }
-
-    setProgress(20, `${times.length}개 프레임 추출 중...`);
-    const frames = [];
-    for (let i = 0; i < times.length; i++) {
-      const cap = await seekAndCapture(v, times[i], CFG.STAGE1_W, 0.8);
-      frames.push(cap);
-      setProgress(20 + Math.round(((i + 1) / times.length) * 15), `프레임 ${i + 1}/${times.length} 추출 완료`);
-    }
-
-    setProgress(38, "1차 AI 분석 중...");
-    let analyzeData = null;
-    let topLevelError = "";
-    try {
-      analyzeData = await postJson("/api/analyze", {
-        mode,
-        frames: frames.map(f => ({ t: f.t, image: f.dataUrl })),
-        high_recall: true
-      });
-    } catch (err) {
-      topLevelError = err.message || String(err);
-    }
-
-    const rawResults = (analyzeData && Array.isArray(analyzeData.results)) ? analyzeData.results : [];
-    const mergedFrames = frames.map((f, idx) => {
-      const r = rawResults[idx] || {};
-      const errReason = r.error || topLevelError || "";
-      return {
-        ...f,
-        ...r,
-        error: errReason
-      };
+      const url = URL.createObjectURL(file);
+      videoPreview.src = url;
+      videoPreview.load();
+      analyzeBtn.disabled = false;
+      statusText.textContent = "분석 준비 완료 (1프레임 추출)";
     });
 
-    // 고감도 기준: 안경/사람/의심 요소가 있거나 실패한 프레임이 있어도 주요 프레임에서 크롭 후보 구성
-    const candidateFrames = mergedFrames.filter(f => !f.error || f.glasses_detected || f.person_detected);
-    const cropSourceFrames = (candidateFrames.length > 0 ? candidateFrames : mergedFrames.filter(f => !f.error)).slice(0, CFG.MAX_GLASSES_JOBS);
+    function captureOneFrame(video) {
+      return new Promise((resolve, reject) => {
+        const run = () => {
+          try {
+            const vw = video.videoWidth || 640;
+            const vh = video.videoHeight || 480;
+            const maxW = 960;
+            const scale = vw > maxW ? maxW / vw : 1;
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(vw * scale));
+            canvas.height = Math.max(1, Math.round(vh * scale));
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+            resolve([dataUrl]);
+          } catch (e) {
+            reject(e);
+          }
+        };
 
-    const refineItems = [];
-    if (cropSourceFrames.length > 0) {
-      setProgress(62, "의심 부위 확대 재분석 준비 중...");
-      hiOpened = await openVideo(selectedFile);
-      const hv = hiOpened.video;
-
-      for (const cf of cropSourceFrames) {
-        await seekAndCapture(hv, cf.t, CFG.HI_W, 0.9);
-        const multi = buildMultiCrops(cf);
-        for (const c of multi) {
-          if (refineItems.length >= CFG.MAX_GLASSES_JOBS) break;
-          const cropDataUrl = makeCropFromBox(hv, c.box, CFG.CROP_OUT, 0.85);
-          refineItems.push({
-            t: cf.t,
-            label: c.label,
-            image: cropDataUrl
-          });
+        if (video.readyState >= 2) {
+          run();
+        } else {
+          video.addEventListener("loadeddata", run, { once: true });
+          video.addEventListener("error", () => reject(new Error("영상을 불러올 수 없습니다.")), { once: true });
         }
-        if (refineItems.length >= CFG.MAX_GLASSES_JOBS) break;
-      }
+      });
     }
 
-    let refineResults = [];
-    if (refineItems.length > 0) {
-      setProgress(80, `확대 크롭 ${refineItems.length}장 재분석 중...`);
+    analyzeBtn.addEventListener("click", async () => {
+      clearError();
+      resultCard.style.display = "none";
+      analyzeBtn.disabled = true;
+      statusText.textContent = `${FRAME_COUNT}프레임 추출 중...`;
+
       try {
-        const refResp = await postJson("/api/refine", {
-          mode,
-          crops: refineItems.map(item => ({ t: item.t, label: item.label, image: item.image })),
-          high_recall: true
+        const frames = await captureOneFrame(videoPreview);
+        statusText.textContent = "서버로 전송 및 분석 중...";
+
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frames }),
         });
-        refineResults = Array.isArray(refResp.results) ? refResp.results : [];
-      } catch (refErr) {
-        refineResults = refineItems.map(item => ({
-          t: item.t,
-          label: item.label,
-          image: item.image,
-          error: refErr.message || String(refErr)
-        }));
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `서버 오류 (${res.status})`);
+        }
+
+        const results = Array.isArray(data.results) ? data.results : [];
+        const okCount = results.filter((r) => r && !r.error).length;
+        const firstErr = results.find((r) => r && r.error);
+
+        statusText.textContent = "분석 완료";
+        resultCard.style.display = "block";
+        summaryText.innerHTML = `<strong>성공 프레임:</strong> ${okCount}/${results.length} · <strong>모드:</strong> ${data.mock ? "MOCK" : "실제 AI"}`;
+        rawJson.textContent = JSON.stringify(data, null, 2);
+
+        if (firstErr) {
+          showError(`프레임 #${firstErr.index} 오류: ${firstErr.error}`);
+        }
+      } catch (e) {
+        statusText.textContent = "분석 실패";
+        showError(e.message || String(e));
+      } finally {
+        analyzeBtn.disabled = false;
       }
-    }
-
-    setProgress(100, "분석 완료");
-    renderResults({
-      mergedFrames,
-      refineItems,
-      refineResults,
-      topLevelError
     });
-  } catch (fatalErr) {
-    renderFatalError(fatalErr.message || String(fatalErr));
-  } finally {
-    if (opened && opened.revoke) opened.revoke();
-    if (hiOpened && hiOpened.revoke) hiOpened.revoke();
-    btn.disabled = false;
-  }
-}
-
-function renderFatalError(msg) {
-  const area = document.getElementById("resultArea");
-  area.style.display = "block";
-  document.getElementById("summaryCard").innerHTML = `
-    <span class="badge b-bad">분석 오류</span>
-    <div class="sum-title">분석을 완료하지 못했습니다.</div>
-    <div class="err-box">사유: ${escapeHtml(msg)}</div>
-  `;
-  document.getElementById("refineBody").innerHTML = `<p class="hint">확대 재분석 데이터가 없습니다.</p>`;
-  document.getElementById("framesBody").innerHTML = `<p class="hint">프레임 데이터가 없습니다.</p>`;
-}
-
-function renderResults({ mergedFrames, refineItems, refineResults, topLevelError }) {
-  const area = document.getElementById("resultArea");
-  area.style.display = "block";
-
-  const totalCount = mergedFrames.length;
-  const failedFrames = mergedFrames.filter(f => Boolean(f.error));
-  const okFrames = mergedFrames.filter(f => !f.error);
-
-  const reasons = Array.from(new Set(failedFrames.map(f => f.error).filter(Boolean)));
-  const reasonText = reasons.length > 0
-    ? reasons.join(" / ")
-    : (topLevelError || "서버 응답 오류 또는 타임아웃");
-
-  const glassesSuspectCount = okFrames.filter(f =>
-    f.smart_glasses_suspected || f.glasses_detected || f.suspicious || (Number(f.score || 0) >= 0.35)
-  ).length;
-
-  const camSuspectCount = okFrames.filter(f =>
-    f.hidden_camera_suspected || f.camera_detected
-  ).length;
-
-  const refineSuspectCount = refineResults.filter(r =>
-    !r.error && (r.smart_glasses_suspected || r.glasses_detected || r.suspicious || (Number(r.score || 0) >= 0.35))
-  ).length;
-
-  let badgeClass = "b-ok";
-  let headline = "스마트 안경 의심 징후 약함";
-  let desc = "추출된 프레임에서 뚜렷한 스마트 안경 의심 요소가 두드러지지 않았습니다.";
-
-  if (glassesSuspectCount > 0 || refineSuspectCount > 0) {
-    badgeClass = "b-bad";
-    headline = `스마트 안경 의심 감지 (1차 ${glassesSuspectCount}건 · 확대 ${refineSuspectCount}건)`;
-    desc = "고감도 기준으로 테 두께, 힌지/다리 구조, 모서리 센서/렌즈 또는 반사 의심 패턴이 포착되었습니다.";
-  } else if (okFrames.length > 0) {
-    badgeClass = "b-warn";
-    headline = "일반 안경 또는 의심 경계 수준";
-    desc = "일부 프레임에서 안경 또는 유사 구조가 보였으나, 강한 스마트 안경 특성은 낮게 평가되었습니다.";
-  }
-
-  const failHtml = failedFrames.length > 0
-    ? `<div class="err-box">${failedFrames.length}개 프레임은 분석에 실패했습니다. (사유: ${escapeHtml(reasonText)})</div>`
-    : "";
-
-  document.getElementById("summaryCard").innerHTML = `
-    <span class="badge ${badgeClass}">${mode === "flash" ? "플래시 스캔" : "일반 분석"}</span>
-    <div class="sum-title">안경: ${escapeHtml(headline)}</div>
-    <p class="sum-desc">${escapeHtml(desc)}</p>
-    <div class="sum-desc" style="margin-bottom:4px;">
-      <strong>초소형 카메라 후보:</strong> ${camSuspectCount > 0 ? `${camSuspectCount}건 의심` : "발견 안 됨"}
-      · <strong>성공 프레임:</strong> ${okFrames.length}/${totalCount}
-    </div>
-    ${failHtml}
-  `;
-
-  // 확대 재분석 카드 렌더
-  const refineBody = document.getElementById("refineBody");
-  if (!refineItems || refineItems.length === 0) {
-    refineBody.innerHTML = `<p class="hint">확대해서 볼 의심 부위가 없었거나 프레임 분석이 완료되지 않았습니다.</p>`;
-  } else {
-    refineBody.innerHTML = refineItems.map((item, idx) => {
-      const r = refineResults[idx] || {};
-      const statusText = r.error
-        ? `실패 (${r.error})`
-        : (r.smart_glasses_suspected || r.glasses_detected || r.suspicious ? "의심 요소 포착" : "특이점 낮음");
-      const detail = r.error ? r.error : (r.reason || r.note || "확대 크롭 검토 완료");
-      return `
-        <div class="thumb-card" onclick="openModal('${escapeAttr(item.image)}', '${escapeAttr(item.label + ' — ' + statusText + ' (' + detail + ')')}')">
-          <img src="${item.image}" alt="${escapeAttr(item.label)}">
-          <div class="thumb-meta">
-            <strong>${escapeHtml(item.label)}</strong>
-            <span>${escapeHtml(statusText)}</span>
-          </div>
-        </div>
-      `;
-    }).join("");
-  }
-
-  // 프레임별 카드 렌더
-  const framesBody = document.getElementById("framesBody");
-  framesBody.innerHTML = mergedFrames.map(f => {
-    const label = f.error
-      ? `실패 (${f.error})`
-      : (f.smart_glasses_suspected || f.glasses_detected ? "안경/의심 감지" : (f.person_detected ? "인물 확인됨" : "특이점 없음"));
-    const sub = f.error ? f.error : (f.reason || f.note || "");
-    return `
-      <div class="thumb-card" onclick="openModal('${escapeAttr(f.image)}', '${escapeAttr(f.t + 's — ' + label + (sub ? ' / ' + sub : ''))}')">
-        <img src="${f.image}" alt="${f.t}s 프레임">
-        <div class="thumb-meta">
-          <strong>${f.t}s 프레임</strong>
-          <span>${escapeHtml(label)}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
-}
-
-function openModal(src, caption) {
-  document.getElementById("modalImg").src = src;
-  document.getElementById("modalCaption").textContent = caption;
-  document.getElementById("modalBg").classList.add("show");
-}
-
-function closeModal() {
-  document.getElementById("modalBg").classList.remove("show");
-}
-
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function escapeAttr(str) {
-  return escapeHtml(str).replace(/'/g, "&#39;");
-}
-
-loadStatus();
-</script>
+  </script>
 </body>
 </html>
