@@ -132,12 +132,19 @@
       border-radius: 999px;
       background: #dcfce7;
       color: #166534;
+      flex-shrink: 0;
     }
     .evidence {
       font-size: 13px;
       color: #334155;
       margin: 0 0 6px;
       line-height: 1.45;
+    }
+    .sub-raw {
+      font-size: 11px;
+      color: #94a3b8;
+      margin: 0 0 6px;
+      line-height: 1.35;
     }
     .coord {
       font-size: 12px;
@@ -179,7 +186,7 @@
         <h1>LensGuard</h1>
         <span class="pill">3프레임 모드</span>
       </div>
-      <p class="sub">영상을 고르고 분석 시작을 누르면 의심 부위를 요약해 보여줍니다.</p>
+      <p class="sub">영상을 고르고 분석 시작을 누르면 의심 부위를 한국어로 요약해 보여줍니다.</p>
       <input id="videoInput" type="file" accept="video/*" />
       <video id="videoPreview" controls playsinline muted></video>
       <button id="analyzeBtn" disabled>분석 시작</button>
@@ -209,6 +216,79 @@
     const metaBar = document.getElementById("metaBar");
     const candidateList = document.getElementById("candidateList");
     const rawJson = document.getElementById("rawJson");
+
+    const KIND_KO = {
+      lens: "카메라 렌즈",
+      camera: "카메라",
+      led: "녹화 표시등(LED)",
+      sensor: "센서",
+      mic: "마이크",
+      hinge: "힌지/이음새"
+    };
+
+    function translateKind(kind) {
+      if (!kind) return "의심 부위";
+      const key = String(kind).toLowerCase().trim();
+      if (KIND_KO[key]) return KIND_KO[key];
+      if (key.includes("lens") || key.includes("camera")) return "카메라 렌즈";
+      if (key.includes("led") || key.includes("indicator") || key.includes("light")) return "녹화 표시등(LED)";
+      if (key.includes("sensor")) return "센서";
+      return kind;
+    }
+
+    function translateWhere(where) {
+      if (!where) return "위치 미상";
+      let t = String(where);
+      const replacements = [
+        [/right temple hinge/gi, "오른쪽 안경다리 연결부"],
+        [/left temple hinge/gi, "왼쪽 안경다리 연결부"],
+        [/temple hinge/gi, "안경다리 연결부"],
+        [/right temple/gi, "오른쪽 안경다리"],
+        [/left temple/gi, "왼쪽 안경다리"],
+        [/glasses frame corner/gi, "안경테 모서리"],
+        [/sunglasses frame/gi, "선글라스 프레임"],
+        [/glasses frame/gi, "안경 프레임"],
+        [/frame front/gi, "프레임 앞면"],
+        [/top corner/gi, "위쪽 모서리"],
+        [/bottom corner/gi, "아래쪽 모서리"],
+        [/right corner/gi, "오른쪽 모서리"],
+        [/left corner/gi, "왼쪽 모서리"],
+        [/corner/gi, "모서리"],
+        [/of sunglasses/gi, "(선글라스)"],
+        [/of glasses/gi, "(안경)"],
+        [/on the/gi, ""],
+        [/the /gi, ""]
+      ];
+      for (const [re, ko] of replacements) {
+        t = t.replace(re, ko);
+      }
+      return t.replace(/\s+/g, " ").trim();
+    }
+
+    function translateEvidence(evidence) {
+      if (!evidence) return "";
+      let t = String(evidence);
+      const replacements = [
+        [/Camera lens aperture visible on the top corner of the sunglasses frame\.?/gi, "선글라스 프레임 위쪽 모서리에 카메라 렌즈 구멍이 보입니다."],
+        [/LED recording indicator ring visible on the frame front\.?/gi, "프레임 앞쪽에 녹화 표시용 LED 링이 보입니다."],
+        [/Built-in camera lens on the right corner of the glasses frame\.?/gi, "안경테 오른쪽 모서리에 내장 카메라 렌즈가 보입니다."],
+        [/camera lens aperture/gi, "카메라 렌즈 구멍"],
+        [/camera lens/gi, "카메라 렌즈"],
+        [/recording indicator ring/gi, "녹화 표시등 링"],
+        [/recording indicator/gi, "녹화 표시등"],
+        [/visible on/gi, "보이는 곳:"],
+        [/sunglasses frame/gi, "선글라스 프레임"],
+        [/glasses frame/gi, "안경 프레임"],
+        [/frame front/gi, "프레임 앞면"],
+        [/top corner/gi, "위쪽 모서리"],
+        [/right corner/gi, "오른쪽 모서리"],
+        [/left corner/gi, "왼쪽 모서리"]
+      ];
+      for (const [re, ko] of replacements) {
+        t = t.replace(re, ko);
+      }
+      return t.trim();
+    }
 
     function showError(msg) {
       errorBox.textContent = msg;
@@ -294,20 +374,24 @@
 
       candidateList.innerHTML = items.map((c, idx) => {
         const pct = typeof c.confidence === "number" ? `${Math.round(c.confidence * 100)}%` : "-";
-        const where = c.where || "위치 미상";
-        const kind = c.kind || "의심 부위";
+        const whereKo = translateWhere(c.where);
+        const kindKo = translateKind(c.kind);
+        const evidenceKo = translateEvidence(c.evidence);
         const b = c.bbox || {};
         const coordText = [b.x, b.y, b.w, b.h].every((v) => typeof v === "number")
           ? `위치(${b.x.toFixed(2)}, ${b.y.toFixed(2)}) · 크기(${b.w.toFixed(2)}×${b.h.toFixed(2)})`
           : "";
 
+        const rawHint = [c.where, c.kind, c.evidence].filter(Boolean).join(" · ");
+
         return `
           <div class="candidate">
             <div class="candidate-head">
-              <span class="candidate-title">#${idx + 1} ${where} (${kind})</span>
+              <span class="candidate-title">#${idx + 1} ${whereKo} · ${kindKo}</span>
               <span class="conf-badge">신뢰도 ${pct}</span>
             </div>
-            ${c.evidence ? `<p class="evidence">${c.evidence}</p>` : ""}
+            ${evidenceKo ? `<p class="evidence">${evidenceKo}</p>` : ""}
+            ${rawHint ? `<div class="sub-raw">원문: ${rawHint}</div>` : ""}
             ${coordText ? `<div class="coord">${coordText}</div>` : ""}
           </div>
         `;
