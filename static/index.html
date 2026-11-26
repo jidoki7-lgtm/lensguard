@@ -255,6 +255,12 @@ async function extractFrames(f, n, onProgress){
   return out;
 }
 
+/* 얼굴 박스에서 안경이 있을 자리(이마 아래~코끝 위)를 잘라낸다. */
+function eyeRegion(fb){
+  const x = clamp(fb.x - 0.08 * fb.w, 0, 1), y = clamp(fb.y + 0.15 * fb.h, 0, 1);
+  return { x, y, w: Math.min(fb.w * 1.16, 1 - x), h: Math.min(fb.h * 0.5, 1 - y) };
+}
+
 /* 1차 결과에서 확대해서 다시 볼 영역을 고른다. */
 function buildJobs(frames, results){
   const gl = [], cam = [];
@@ -264,6 +270,10 @@ function buildJobs(frames, results){
     if (gb){
       const prio = (isSmart(g.kind) ? 2 : 0.5) + conf01(g.confidence) * 0.5;
       gl.push({ frame: i, kind: 'glasses', box: gb, prio, label: '안경' });
+    } else {
+      // 1차에서 안경을 못 찾았어도, 얼굴 위치만 알면 눈 주변을 확대해서 다시 확인한다.
+      const fb = r.face && r.face.visible ? validBox(r.face.bbox) : null;
+      if (fb) gl.push({ frame: i, kind: 'glasses', box: eyeRegion(fb), prio: 0.2 + fb.w * fb.h, label: '눈 주변', auto: true });
     }
     (r.camera_candidates || []).forEach(c => {
       const b = validBox(c.bbox);
@@ -318,16 +328,21 @@ $('go').onclick = async () => {
 function glassesPerFrame(){
   return S.frames.map((f, i) => {
     const r = S.results[i];
-    if (!r || r.error || !r.glasses || !r.glasses.worn) return null;
-    const g = r.glasses;
+    if (!r || r.error) return null;
+    const g = r.glasses || {};
+    const worn1 = !!g.worn && (g.kind || 'regular') !== 'none';
+    const j = S.jobs.find(j => j.frame === i && j.kind === 'glasses' && j.res && !j.res.error);
+    if (!j && !worn1) return null;
     const o = { i, kind: g.kind || 'regular', conf: conf01(g.confidence), refined: false, lens: null,
                 ev: g.evidence || '', bbox: validBox(g.bbox) };
-    const j = S.jobs.find(j => j.frame === i && j.kind === 'glasses' && j.res && !j.res.error);
     if (j){
+      // 확대해서 본 결과가 더 정밀하므로 우선한다. 확대본에서 안경이 없다고 하면 이 프레임은 제외.
+      if ((j.res.kind || 'none') === 'none') return null;
       o.refined = true;
-      o.kind = j.res.kind || o.kind;
+      o.kind = j.res.kind;
       o.conf = conf01(j.res.confidence, o.conf);
       o.ev = j.res.evidence || o.ev;
+      if (!o.bbox) o.bbox = j.box;
       const lb = j.res.lens_found ? validBox(j.res.lens_bbox) : null;
       if (lb) o.lens = mapBox(lb, j.rect);
     }
@@ -351,6 +366,12 @@ function renderNormal(){
     kind = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
   }
   const lvl = sus.length ? levelOf(score) : 'lo';
+  if (!gf.length){
+    const faces = S.results.filter(r => r && !r.error && r.face && r.face.visible).length;
+    note = faces
+      ? '안경이 보이지 않는다고 판단했습니다. (얼굴 감지 ' + faces + '/' + S.results.length + '프레임, 눈 주변 ' + S.jobs.filter(j => j.kind === 'glasses').length + '곳 확대 확인)'
+      : '얼굴을 찾지 못했습니다. 얼굴이 화면에 더 크고 밝게 나오도록 가까이서 다시 촬영해 보세요.';
+  }
 
   const camHit = S.jobs.filter(j => j.kind === 'camera' && j.res && !j.res.error &&
     ['possible', 'likely'].includes(j.res.is_camera) && conf01(j.res.confidence) >= 0.35)
@@ -396,7 +417,7 @@ function renderNormal(){
     const ctx = c.getContext('2d'); ctx.drawImage(j.crop, 0, 0);
     const res = j.res && !j.res.error ? j.res : null;
     if (res && validBox(res.lens_bbox)) drawBox(ctx, c, validBox(res.lens_bbox), '#ff3b30', '');
-    let t = '<b>프레임 ' + (j.frame + 1) + ' · ' + (j.kind === 'glasses' ? '안경' : esc(j.label)) + '</b><br>';
+    let t = '<b>프레임 ' + (j.frame + 1) + ' · ' + esc(j.label) + '</b><br>';
     if (!res) t += '<span class="note">' + esc(j.res ? j.res.error : '결과 없음') + '</span>';
     else if (j.kind === 'glasses') t += (KIND_KO[res.kind] || esc(res.kind)) + ' ' + Math.round(conf01(res.confidence) * 100) + '%<br><span class="note">' + esc(res.evidence || '') + '</span>';
     else t += (IS_CAM_KO[res.is_camera] || '') + ' ' + Math.round(conf01(res.confidence) * 100) + '% · ' + esc(res.object || '') + '<br><span class="note">' + esc(res.evidence || '') + '</span>';
