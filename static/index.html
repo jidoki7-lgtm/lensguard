@@ -1,46 +1,363 @@
-<script>
-  const FRAME_COUNT = 3;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LensGuard</title>
+  <link rel="manifest" href="/manifest.json" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+      background: #f3f5fa;
+      color: #151821;
+      padding: 16px;
+    }
+    .wrap {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 6px 20px rgba(17, 24, 39, 0.06);
+      margin-bottom: 14px;
+    }
+    .top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0;
+    }
+    .pill {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+    }
+    .sub {
+      font-size: 13px;
+      color: #5d6475;
+      margin: 0 0 12px;
+    }
+    input[type="file"] {
+      width: 100%;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    video {
+      width: 100%;
+      border-radius: 12px;
+      background: #000;
+      max-height: 250px;
+      display: block;
+      margin-bottom: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      border: 0;
+      border-radius: 12px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #93c5fd;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
+    }
+    .err {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      background: #fef2f2;
+      color: #b91c1c;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .meta-chip {
+      background: #f1f5f9;
+      color: #1e293b;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 10px;
+    }
+    .candidate {
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 12px;
+      background: #fafcff;
+      margin-bottom: 10px;
+    }
+    .candidate-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .candidate-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .conf-badge {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #dcfce7;
+      color: #166534;
+    }
+    .evidence {
+      font-size: 13px;
+      color: #334155;
+      margin: 0 0 6px;
+      line-height: 1.45;
+    }
+    .coord {
+      font-size: 12px;
+      color: #64748b;
+    }
+    .empty-box {
+      padding: 14px;
+      border-radius: 12px;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 14px;
+      text-align: center;
+    }
+    details {
+      margin-top: 10px;
+    }
+    summary {
+      cursor: pointer;
+      font-size: 13px;
+      color: #64748b;
+      font-weight: 600;
+    }
+    pre {
+      background: #f8fafc;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 11px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="top-row">
+        <h1>LensGuard</h1>
+        <span class="pill">3프레임 모드</span>
+      </div>
+      <p class="sub">영상을 고르고 분석 시작을 누르면 의심 부위를 요약해 보여줍니다.</p>
+      <input id="videoInput" type="file" accept="video/*" />
+      <video id="videoPreview" controls playsinline muted></video>
+      <button id="analyzeBtn" disabled>분석 시작</button>
+      <div id="statusText" class="status">영상을 선택해 주세요.</div>
+      <div id="errorBox" class="err" style="display:none;"></div>
+    </div>
 
-  function seekTo(video, timeSec) {
-    return new Promise((resolve) => {
-      const clamped = Math.max(0, Math.min(timeSec, (video.duration || 1) - 0.05));
-      if (Math.abs(video.currentTime - clamped) < 0.03) {
-        resolve();
+    <div id="resultCard" class="card" style="display:none;">
+      <div id="metaBar" class="meta-bar"></div>
+      <div id="candidateList"></div>
+      <details>
+        <summary>원본 JSON 보기</summary>
+        <pre id="rawJson"></pre>
+      </details>
+    </div>
+  </div>
+
+  <script>
+    const FRAME_COUNT = 3;
+
+    const videoInput = document.getElementById("videoInput");
+    const videoPreview = document.getElementById("videoPreview");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const statusText = document.getElementById("statusText");
+    const errorBox = document.getElementById("errorBox");
+    const resultCard = document.getElementById("resultCard");
+    const metaBar = document.getElementById("metaBar");
+    const candidateList = document.getElementById("candidateList");
+    const rawJson = document.getElementById("rawJson");
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = "block";
+    }
+
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.style.display = "none";
+    }
+
+    videoInput.addEventListener("change", () => {
+      clearError();
+      resultCard.style.display = "none";
+      const file = videoInput.files && videoInput.files[0];
+      if (!file) {
+        analyzeBtn.disabled = true;
+        statusText.textContent = "영상을 선택해 주세요.";
         return;
       }
-      const onSeeked = () => {
-        video.removeEventListener("seeked", onSeeked);
-        resolve();
-      };
-      video.addEventListener("seeked", onSeeked);
-      video.currentTime = clamped;
+      videoPreview.src = URL.createObjectURL(file);
+      videoPreview.load();
+      analyzeBtn.disabled = false;
+      statusText.textContent = `분석 준비 완료 (${FRAME_COUNT}프레임)`;
     });
-  }
 
-  async function captureFrames(video, count = 3) {
-    if (video.readyState < 1) {
-      await new Promise((resolve, reject) => {
-        video.addEventListener("loadedmetadata", resolve, { once: true });
-        video.addEventListener("error", () => reject(new Error("영상을 불러올 수 없습니다.")), { once: true });
+    function seekTo(video, timeSec) {
+      return new Promise((resolve) => {
+        const clamped = Math.max(0, Math.min(timeSec, (video.duration || 1) - 0.05));
+        if (Math.abs(video.currentTime - clamped) < 0.03) {
+          resolve();
+          return;
+        }
+        const onSeeked = () => {
+          video.removeEventListener("seeked", onSeeked);
+          resolve();
+        };
+        video.addEventListener("seeked", onSeeked);
+        video.currentTime = clamped;
       });
     }
-    const dur = video.duration || 1;
-    const ratios = [0.05, 0.45, 0.85].slice(0, count);
-    const out = [];
 
-    for (const r of ratios) {
-      await seekTo(video, dur * r);
-      const vw = video.videoWidth || 640;
-      const vh = video.videoHeight || 480;
-      const maxW = 960;
-      const scale = vw > maxW ? maxW / vw : 1;
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(vw * scale));
-      canvas.height = Math.max(1, Math.round(vh * scale));
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      out.push(canvas.toDataURL("image/jpeg", 0.82));
+    async function captureFrames(video, count = 3) {
+      if (video.readyState < 1) {
+        await new Promise((resolve, reject) => {
+          video.addEventListener("loadedmetadata", resolve, { once: true });
+          video.addEventListener("error", () => reject(new Error("영상을 불러올 수 없습니다.")), { once: true });
+        });
+      }
+      const dur = video.duration || 1;
+      const ratios = [0.05, 0.45, 0.85].slice(0, count);
+      const out = [];
+
+      for (const r of ratios) {
+        await seekTo(video, dur * r);
+        const vw = video.videoWidth || 640;
+        const vh = video.videoHeight || 480;
+        const maxW = 960;
+        const scale = vw > maxW ? maxW / vw : 1;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(vw * scale));
+        canvas.height = Math.max(1, Math.round(vh * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        out.push(canvas.toDataURL("image/jpeg", 0.82));
+      }
+      return out;
     }
-    return out;
-  }
-</script>
+
+    function renderCandidates(results) {
+      const items = [];
+      for (const r of results) {
+        if (!r || r.error || !Array.isArray(r.camera_candidates)) continue;
+        for (const c of r.camera_candidates) {
+          items.push({ frame: r.index ?? 0, ...c });
+        }
+      }
+
+      if (items.length === 0) {
+        candidateList.innerHTML = `<div class="empty-box">눈에 띄는 카메라 의심 부위가 잡히지 않았어요.</div>`;
+        return;
+      }
+
+      candidateList.innerHTML = items.map((c, idx) => {
+        const pct = typeof c.confidence === "number" ? `${Math.round(c.confidence * 100)}%` : "-";
+        const where = c.where || "위치 미상";
+        const kind = c.kind || "의심 부위";
+        const b = c.bbox || {};
+        const coordText = [b.x, b.y, b.w, b.h].every((v) => typeof v === "number")
+          ? `위치(${b.x.toFixed(2)}, ${b.y.toFixed(2)}) · 크기(${b.w.toFixed(2)}×${b.h.toFixed(2)})`
+          : "";
+
+        return `
+          <div class="candidate">
+            <div class="candidate-head">
+              <span class="candidate-title">#${idx + 1} ${where} (${kind})</span>
+              <span class="conf-badge">신뢰도 ${pct}</span>
+            </div>
+            ${c.evidence ? `<p class="evidence">${c.evidence}</p>` : ""}
+            ${coordText ? `<div class="coord">${coordText}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+    }
+
+    analyzeBtn.addEventListener("click", async () => {
+      clearError();
+      resultCard.style.display = "none";
+      analyzeBtn.disabled = true;
+      statusText.textContent = `${FRAME_COUNT}프레임 추출 중...`;
+
+      try {
+        const frames = await captureFrames(videoPreview, FRAME_COUNT);
+        statusText.textContent = "AI 분석 중...";
+
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frames }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `서버 오류 (${res.status})`);
+        }
+
+        const results = Array.isArray(data.results) ? data.results : [];
+        const okCount = results.filter((r) => r && !r.error).length;
+        const firstErr = results.find((r) => r && r.error);
+
+        statusText.textContent = "분석 완료";
+        resultCard.style.display = "block";
+        metaBar.innerHTML = `
+          <span class="meta-chip">성공 ${okCount}/${results.length}</span>
+          <span class="meta-chip">${data.mock ? "MOCK 모드" : "실제 AI"}</span>
+        `;
+        renderCandidates(results);
+        rawJson.textContent = JSON.stringify(data, null, 2);
+
+        if (firstErr) {
+          showError(`프레임 #${firstErr.index} 오류: ${firstErr.error}`);
+        }
+      } catch (e) {
+        statusText.textContent = "분석 실패";
+        showError(e.message || String(e));
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
