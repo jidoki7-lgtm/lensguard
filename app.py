@@ -94,7 +94,7 @@ Reply with ONLY a JSON object, no prose, in this schema:
 
 
 def decode_image(data, limit=MAX_FRAME_BYTES):
-    """data URL, base64 문자열, 또는 {'image': ...} 딕셔너리를 검증한다. (b64, 오류메시지) 반환."""
+    """data URL 또는 base64 문자열을 검증한다. (b64, 오류메시지) 반환."""
     if isinstance(data, dict):
         data = data.get("image") or data.get("dataUrl") or data.get("data")
     if not isinstance(data, str) or not data.strip():
@@ -109,11 +109,10 @@ def decode_image(data, limit=MAX_FRAME_BYTES):
         raw = base64.b64decode(b64, validate=False)
     except Exception:
         return None, "잘못된 이미지 데이터"
-    if len(raw) < 32:
-        return None, "잘못된 이미지 데이터"
     if len(raw) > limit:
         return None, f"이미지가 너무 큽니다 ({limit // 1_000_000:.1f}MB 초과)"
-    return b64, None
+    return b64, Nonedef
+       
 
 
 def extract_json(text: str):
