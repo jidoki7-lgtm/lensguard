@@ -10,8 +10,8 @@
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
-      background: #f4f6fb;
-      color: #161922;
+      background: #f3f5fa;
+      color: #151821;
       padding: 16px;
     }
     .wrap {
@@ -20,18 +20,33 @@
     }
     .card {
       background: #fff;
-      border-radius: 16px;
+      border-radius: 18px;
       padding: 16px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 6px 20px rgba(17, 24, 39, 0.06);
       margin-bottom: 14px;
+    }
+    .top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
     }
     h1 {
       font-size: 20px;
-      margin: 0 0 6px;
+      margin: 0;
+    }
+    .pill {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
     }
     .sub {
       font-size: 13px;
-      color: #5b6275;
+      color: #5d6475;
       margin: 0 0 12px;
     }
     input[type="file"] {
@@ -43,7 +58,7 @@
       width: 100%;
       border-radius: 12px;
       background: #000;
-      max-height: 260px;
+      max-height: 250px;
       display: block;
       margin-bottom: 12px;
     }
@@ -52,57 +67,119 @@
       padding: 14px;
       border: 0;
       border-radius: 12px;
-      background: #1d5cff;
+      background: #2563eb;
       color: #fff;
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
     }
     button:disabled {
-      background: #9bb3f5;
+      background: #93c5fd;
       cursor: not-allowed;
     }
     .status {
       margin-top: 10px;
       font-size: 14px;
       font-weight: 600;
-      color: #2b3348;
+      color: #334155;
     }
     .err {
       margin-top: 10px;
       padding: 12px;
-      border-radius: 10px;
-      background: #fff0f0;
-      color: #b42318;
+      border-radius: 12px;
+      background: #fef2f2;
+      color: #b91c1c;
       font-size: 13px;
       white-space: pre-wrap;
     }
-    .badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: #e8f0ff;
-      color: #1d5cff;
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .meta-chip {
+      background: #f1f5f9;
+      color: #1e293b;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 10px;
+    }
+    .candidate {
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 12px;
+      background: #fafcff;
+      margin-bottom: 10px;
+    }
+    .candidate-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .candidate-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .conf-badge {
       font-size: 12px;
       font-weight: 700;
-      margin-bottom: 8px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #dcfce7;
+      color: #166534;
+    }
+    .evidence {
+      font-size: 13px;
+      color: #334155;
+      margin: 0 0 6px;
+      line-height: 1.45;
+    }
+    .coord {
+      font-size: 12px;
+      color: #64748b;
+    }
+    .empty-box {
+      padding: 14px;
+      border-radius: 12px;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 14px;
+      text-align: center;
+    }
+    details {
+      margin-top: 10px;
+    }
+    summary {
+      cursor: pointer;
+      font-size: 13px;
+      color: #64748b;
+      font-weight: 600;
     }
     pre {
-      background: #f6f8fa;
-      padding: 12px;
+      background: #f8fafc;
+      padding: 10px;
       border-radius: 10px;
-      font-size: 12px;
+      font-size: 11px;
       overflow-x: auto;
       white-space: pre-wrap;
       word-break: break-word;
+      margin-top: 8px;
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>LensGuard</h1>
-      <p class="sub">1프레임 테스트 모드 · 영상을 선택하고 분석 시작을 누르세요.</p>
+      <div class="top-row">
+        <h1>LensGuard</h1>
+        <span class="pill">1프레임 모드</span>
+      </div>
+      <p class="sub">영상을 고르고 분석 시작을 누르면 의심 부위를 요약해 보여줍니다.</p>
       <input id="videoInput" type="file" accept="video/*" />
       <video id="videoPreview" controls playsinline muted></video>
       <button id="analyzeBtn" disabled>분석 시작</button>
@@ -111,14 +188,17 @@
     </div>
 
     <div id="resultCard" class="card" style="display:none;">
-      <div class="badge">분석 결과</div>
-      <div id="summaryText"></div>
-      <pre id="rawJson"></pre>
+      <div id="metaBar" class="meta-bar"></div>
+      <div id="candidateList"></div>
+      <details>
+        <summary>원본 JSON 보기</summary>
+        <pre id="rawJson"></pre>
+      </details>
     </div>
   </div>
 
   <script>
-    const FRAME_COUNT = 1; // 429 한도 테스트를 위해 1프레임만 전송
+    const FRAME_COUNT = 1;
 
     const videoInput = document.getElementById("videoInput");
     const videoPreview = document.getElementById("videoPreview");
@@ -126,7 +206,8 @@
     const statusText = document.getElementById("statusText");
     const errorBox = document.getElementById("errorBox");
     const resultCard = document.getElementById("resultCard");
-    const summaryText = document.getElementById("summaryText");
+    const metaBar = document.getElementById("metaBar");
+    const candidateList = document.getElementById("candidateList");
     const rawJson = document.getElementById("rawJson");
 
     function showError(msg) {
@@ -148,11 +229,10 @@
         statusText.textContent = "영상을 선택해 주세요.";
         return;
       }
-      const url = URL.createObjectURL(file);
-      videoPreview.src = url;
+      videoPreview.src = URL.createObjectURL(file);
       videoPreview.load();
       analyzeBtn.disabled = false;
-      statusText.textContent = "분석 준비 완료 (1프레임 추출)";
+      statusText.textContent = "분석 준비 완료 (1프레임)";
     });
 
     function captureOneFrame(video) {
@@ -168,8 +248,7 @@
             canvas.height = Math.max(1, Math.round(vh * scale));
             const ctx = canvas.getContext("2d");
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-            resolve([dataUrl]);
+            resolve([canvas.toDataURL("image/jpeg", 0.8)]);
           } catch (e) {
             reject(e);
           }
@@ -184,6 +263,42 @@
       });
     }
 
+    function renderCandidates(results) {
+      const items = [];
+      for (const r of results) {
+        if (!r || r.error || !Array.isArray(r.camera_candidates)) continue;
+        for (const c of r.camera_candidates) {
+          items.push({ frame: r.index ?? 0, ...c });
+        }
+      }
+
+      if (items.length === 0) {
+        candidateList.innerHTML = `<div class="empty-box">눈에 띄는 카메라 의심 부위가 잡히지 않았어요.</div>`;
+        return;
+      }
+
+      candidateList.innerHTML = items.map((c, idx) => {
+        const pct = typeof c.confidence === "number" ? `${Math.round(c.confidence * 100)}%` : "-";
+        const where = c.where || "위치 미상";
+        const kind = c.kind || "의심 부위";
+        const b = c.bbox || {};
+        const coordText = [b.x, b.y, b.w, b.h].every((v) => typeof v === "number")
+          ? `위치(${b.x.toFixed(2)}, ${b.y.toFixed(2)}) · 크기(${b.w.toFixed(2)}×${b.h.toFixed(2)})`
+          : "";
+
+        return `
+          <div class="candidate">
+            <div class="candidate-head">
+              <span class="candidate-title">#${idx + 1} ${where} (${kind})</span>
+              <span class="conf-badge">신뢰도 ${pct}</span>
+            </div>
+            ${c.evidence ? `<p class="evidence">${c.evidence}</p>` : ""}
+            ${coordText ? `<div class="coord">${coordText}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+    }
+
     analyzeBtn.addEventListener("click", async () => {
       clearError();
       resultCard.style.display = "none";
@@ -192,7 +307,7 @@
 
       try {
         const frames = await captureOneFrame(videoPreview);
-        statusText.textContent = "서버로 전송 및 분석 중...";
+        statusText.textContent = "AI 분석 중...";
 
         const res = await fetch("/api/analyze", {
           method: "POST",
@@ -211,7 +326,11 @@
 
         statusText.textContent = "분석 완료";
         resultCard.style.display = "block";
-        summaryText.innerHTML = `<strong>성공 프레임:</strong> ${okCount}/${results.length} · <strong>모드:</strong> ${data.mock ? "MOCK" : "실제 AI"}`;
+        metaBar.innerHTML = `
+          <span class="meta-chip">성공 ${okCount}/${results.length}</span>
+          <span class="meta-chip">${data.mock ? "MOCK 모드" : "실제 AI"}</span>
+        `;
+        renderCandidates(results);
         rawJson.textContent = JSON.stringify(data, null, 2);
 
         if (firstErr) {
