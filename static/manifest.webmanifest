@@ -1,17 +1,16 @@
 {
   "name": "LensGuard",
   "short_name": "LensGuard",
-  "description": "영상 속 스마트 안경과 초소형 카메라 의심 요소를 AI로 분석합니다.",
-  "lang": "ko",
   "start_url": "/",
-  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#101215",
-  "theme_color": "#2457d6",
+  "background_color": "#f3f5fa",
+  "theme_color": "#0E5EFA",
   "icons": [
-    {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-    {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
-    {"src": "/static/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230E5EFA'/%3E%3Ccircle cx='50' cy='50' r='30' fill='white'/%3E%3Ccircle cx='50' cy='50' r='18' fill='%230E5EFA'/%3E%3Ccircle cx='50' cy='50' r='8' fill='white'/%3E%3Cpath d='M22 78L32 68M32 68H24M32 68V76' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ]
 }
