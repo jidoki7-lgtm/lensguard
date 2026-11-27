@@ -32,9 +32,21 @@
       gap: 8px;
       margin-bottom: 4px;
     }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-img {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      object-fit: contain;
+    }
     h1 {
       font-size: 20px;
       margin: 0;
+      font-weight: 800;
     }
     .pill {
       font-size: 12px;
@@ -183,7 +195,17 @@
   <div class="wrap">
     <div class="card">
       <div class="top-row">
-        <h1>LensGuard</h1>
+        <div class="brand-wrap">
+          <!-- SVG로 포함한 렌즈가드 아이콘 로고 -->
+          <svg class="logo-img" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="100" rx="20" fill="#0E5EFA"/>
+            <circle cx="50" cy="50" r="30" fill="white"/>
+            <circle cx="50" cy="50" r="18" fill="#0E5EFA"/>
+            <circle cx="50" cy="50" r="8" fill="white"/>
+            <path d="M22 78L32 68M32 68H24M32 68V76" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <h1>LensGuard</h1>
+        </div>
         <span class="pill">3프레임 모드</span>
       </div>
       <p class="sub">영상을 고르고 분석 시작을 누르면 의심 부위를 한국어로 요약해 보여줍니다.</p>
@@ -223,13 +245,15 @@
       led: "녹화 표시등(LED)",
       sensor: "센서",
       mic: "마이크",
-      hinge: "힌지/이음새"
+      hinge: "힌지/이음새",
+      pinhole: "핀홀(초소형)"
     };
 
     function translateKind(kind) {
       if (!kind) return "의심 부위";
       const key = String(kind).toLowerCase().trim();
       if (KIND_KO[key]) return KIND_KO[key];
+      if (key.includes("pinhole")) return "핀홀(초소형)";
       if (key.includes("lens") || key.includes("camera")) return "카메라 렌즈";
       if (key.includes("led") || key.includes("indicator") || key.includes("light")) return "녹화 표시등(LED)";
       if (key.includes("sensor")) return "센서";
@@ -240,6 +264,7 @@
       if (!where) return "위치 미상";
       let t = String(where);
       const replacements = [
+        [/collar/gi, "옷깃"],
         [/right temple hinge/gi, "오른쪽 안경다리 연결부"],
         [/left temple hinge/gi, "왼쪽 안경다리 연결부"],
         [/temple hinge/gi, "안경다리 연결부"],
@@ -269,6 +294,7 @@
       if (!evidence) return "";
       let t = String(evidence);
       const replacements = [
+        [/Small black object clipped to the collar, possibly a lavalier microphone or miniature camera\.?/gi, "옷깃에 달린 작은 검은색 물체로, 핀마이크(라발리에 마이크)나 초소형 카메라일 가능성이 있습니다."],
         [/Camera lens aperture visible on the top corner of the sunglasses frame\.?/gi, "선글라스 프레임 위쪽 모서리에 카메라 렌즈 구멍이 보입니다."],
         [/LED recording indicator ring visible on the frame front\.?/gi, "프레임 앞쪽에 녹화 표시용 LED 링이 보입니다."],
         [/Built-in camera lens on the right corner of the glasses frame\.?/gi, "안경테 오른쪽 모서리에 내장 카메라 렌즈가 보입니다."],
